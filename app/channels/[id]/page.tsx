@@ -1,0 +1,319 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
+import { supabase, Channel, Question } from '@/lib/supabase';
+import { useRouter, useParams } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ArrowLeft, Send, Loader2, MessageSquare, HelpCircle, Clock, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+export default function ChannelChatPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const params = useParams();
+  const channelId = params.id as string;
+
+  const [channel, setChannel] = useState<Channel | null>(null);
+  const [faqs, setFaqs] = useState<Question[]>([]);
+  const [recentQuestions, setRecentQuestions] = useState<Question[]>([]);
+  const [question, setQuestion] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user && channelId) {
+      fetchChannelData();
+      fetchFAQs();
+      fetchRecentQuestions();
+    }
+  }, [user, channelId]);
+
+  const fetchChannelData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('channels')
+        .select('*')
+        .eq('id', channelId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        router.push('/channels');
+        return;
+      }
+      setChannel(data);
+    } catch (error) {
+      console.error('Error fetching channel:', error);
+      router.push('/channels');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFAQs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('channel_id', channelId)
+        .eq('is_faq', true)
+        .order('faq_order');
+
+      if (error) throw error;
+      setFaqs(data || []);
+    } catch (error) {
+      console.error('Error fetching FAQs:', error);
+    }
+  };
+
+  const fetchRecentQuestions = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('channel_id', channelId)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+      setRecentQuestions(data || []);
+    } catch (error) {
+      console.error('Error fetching recent questions:', error);
+    }
+  };
+
+  const handleSubmitQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!question.trim() || !user) return;
+
+    setSubmitting(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .insert({
+          channel_id: channelId,
+          user_id: user.id,
+          question_text: question.trim(),
+          answer_text: 'Your answer will appear here shortly...',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setQuestion('');
+      fetchRecentQuestions();
+    } catch (error) {
+      console.error('Error submitting question:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FDF2F8]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#EF4444]" />
+      </div>
+    );
+  }
+
+  if (!channel) return null;
+
+  return (
+    <div className="min-h-screen bg-[#FDF2F8]">
+      <div className="min-h-screen bg-gradient-to-br from-pink-50/50 to-purple-50/30">
+        <div className="max-w-[1400px] mx-auto p-8">
+          <header className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-pink-100/50 mb-8 px-8 py-5">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/channels')}
+                className="shrink-0 rounded-xl hover:bg-pink-50"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <Avatar className="h-14 w-14 shrink-0 ring-4 ring-pink-100">
+                <AvatarImage src={channel.avatar_url} alt={channel.name} />
+                <AvatarFallback className="bg-gradient-to-br from-[#FB7185] to-[#EF4444] text-white font-bold text-lg">
+                  {channel.name.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-slate-900 truncate">{channel.name}</h1>
+                <p className="text-sm text-slate-600 truncate">{channel.description}</p>
+              </div>
+            </div>
+          </header>
+
+          <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-pink-100/50">
+                <CardHeader className="p-8 pb-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-12 w-12 bg-gradient-to-br from-[#EF4444] to-[#DC2626] rounded-2xl flex items-center justify-center shadow-lg">
+                      <MessageSquare className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl">Ask Your Question</CardTitle>
+                      <CardDescription className="text-base mt-1">
+                        Get instant insights and connect with the community
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-8 pb-8">
+                  <form onSubmit={handleSubmitQuestion} className="space-y-4">
+                    <Textarea
+                      placeholder="e.g., What marketing tools does this creator recommend for SaaS startups?"
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      className="min-h-[140px] resize-none rounded-2xl border-2 border-pink-100 focus:border-[#FB7185] text-base"
+                      disabled={submitting}
+                    />
+                    <Button
+                      type="submit"
+                      disabled={submitting || !question.trim()}
+                      className="w-full sm:w-auto gap-2 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] shadow-lg text-base py-6 px-8"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-5 w-5" />
+                          Send Question
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-pink-100/50">
+                <CardHeader className="p-8 pb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 bg-gradient-to-br from-[#FB7185] to-[#EF4444] rounded-2xl flex items-center justify-center shadow-lg">
+                      <Clock className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl">Your Discoveries</CardTitle>
+                      <CardDescription className="text-base mt-1">
+                        Your journey with this creator
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-8 pb-8">
+                  <ScrollArea className="h-[500px] pr-4">
+                    {recentQuestions.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500">
+                        <Sparkles className="h-16 w-16 mx-auto mb-4 opacity-30 text-[#FB7185]" />
+                        <p className="text-lg font-medium">Start Your Journey</p>
+                        <p className="text-sm mt-1">Ask your first question above!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {recentQuestions.map((qa) => (
+                          <div key={qa.id} className="space-y-3">
+                            <div className="bg-gradient-to-br from-pink-50 to-red-50 rounded-2xl p-5 border-2 border-pink-200/50">
+                              <div className="flex items-start gap-2 mb-2">
+                                <Badge className="bg-[#EF4444] text-white">You</Badge>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  {new Date(qa.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </p>
+                              </div>
+                              <p className="text-slate-900 leading-relaxed">{qa.question_text}</p>
+                            </div>
+                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-200/50">
+                              <Badge className="bg-[#6D28D9] text-white mb-2">AI Answer</Badge>
+                              <p className="text-slate-700 leading-relaxed">{qa.answer_text}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-1">
+              <Card className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-purple-100/50 sticky top-8">
+                <CardHeader className="p-8 pb-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="h-12 w-12 bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] rounded-2xl flex items-center justify-center shadow-lg">
+                      <HelpCircle className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">Community FAQs</CardTitle>
+                      <CardDescription className="text-sm mt-1">
+                        Popular questions from fans
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="px-8 pb-8">
+                  <ScrollArea className="h-[600px] pr-4">
+                    {faqs.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500">
+                        <HelpCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-[#6D28D9]" />
+                        <p className="text-base font-medium">No FAQs Yet</p>
+                        <p className="text-sm mt-1">Be the first to ask!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        {faqs.map((faq, index) => (
+                          <div key={faq.id}>
+                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-200/50 hover:border-[#6D28D9]/50 transition-colors">
+                              <div className="flex items-start gap-3 mb-3">
+                                <Badge className="bg-[#6D28D9] text-white shrink-0">
+                                  #{index + 1}
+                                </Badge>
+                              </div>
+                              <p className="font-semibold text-slate-900 leading-snug mb-2">
+                                {faq.question_text}
+                              </p>
+                              <p className="text-sm text-slate-600 leading-relaxed">
+                                {faq.answer_text}
+                              </p>
+                            </div>
+                            {index < faqs.length - 1 && <div className="h-5" />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
