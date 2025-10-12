@@ -1,20 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
-import { supabase, Channel, Question } from '@/lib/supabase';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, Send, Loader2, MessageSquare, HelpCircle, Clock, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
+type Channel = {
+  id: string;
+  name: string;
+  description: string;
+  avatar_url: string;
+  youtube_url: string;
+  created_at: string;
+};
+
+type Question = {
+  id: string;
+  channel_id: string;
+  user_id: string;
+  question_text: string;
+  answer_text: string;
+  created_at: string;
+  is_faq: boolean;
+  faq_order: number;
+};
+
 export default function ChannelChatPage() {
-  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
   const channelId = params.id as string;
@@ -27,33 +43,35 @@ export default function ChannelChatPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
       router.push('/login');
+      return;
     }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user && channelId) {
+    if (channelId) {
       fetchChannelData();
       fetchFAQs();
       fetchRecentQuestions();
     }
-  }, [user, channelId]);
+  }, [channelId, router]);
 
   const fetchChannelData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('channels')
-        .select('*')
-        .eq('id', channelId)
-        .maybeSingle();
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-      if (error) throw error;
-      if (!data) {
+      if (!response.ok) throw new Error('Failed to fetch channel');
+
+      const data = await response.json();
+      if (!data.channel) {
         router.push('/channels');
         return;
       }
-      setChannel(data);
+      setChannel(data.channel);
     } catch (error) {
       console.error('Error fetching channel:', error);
       router.push('/channels');
@@ -64,34 +82,35 @@ export default function ChannelChatPage() {
 
   const fetchFAQs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .eq('channel_id', channelId)
-        .eq('is_faq', true)
-        .order('faq_order');
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}/faqs`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-      if (error) throw error;
-      setFaqs(data || []);
+      if (!response.ok) throw new Error('Failed to fetch FAQs');
+
+      const data = await response.json();
+      setFaqs(data.faqs || []);
     } catch (error) {
       console.error('Error fetching FAQs:', error);
     }
   };
 
   const fetchRecentQuestions = async () => {
-    if (!user) return;
-
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .eq('channel_id', channelId)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}/questions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-      if (error) throw error;
-      setRecentQuestions(data || []);
+      if (!response.ok) throw new Error('Failed to fetch questions');
+
+      const data = await response.json();
+      setRecentQuestions(data.questions || []);
     } catch (error) {
       console.error('Error fetching recent questions:', error);
     }
@@ -99,23 +118,22 @@ export default function ChannelChatPage() {
 
   const handleSubmitQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!question.trim() || !user) return;
+    if (!question.trim()) return;
 
     setSubmitting(true);
 
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .insert({
-          channel_id: channelId,
-          user_id: user.id,
-          question_text: question.trim(),
-          answer_text: 'Your answer will appear here shortly...',
-        })
-        .select()
-        .single();
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}/questions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: question.trim() }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) throw new Error('Failed to submit question');
 
       setQuestion('');
       fetchRecentQuestions();
@@ -126,7 +144,7 @@ export default function ChannelChatPage() {
     }
   };
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FDF2F8]">
         <Loader2 className="h-8 w-8 animate-spin text-[#EF4444]" />

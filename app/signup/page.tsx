@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,31 +24,26 @@ export default function SignUpPage() {
     setError('');
 
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          email,
+          password,
+          full_name: fullName
+        }),
       });
 
-      if (signUpError) throw signUpError;
-
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .insert({
-            id: data.user.id,
-            email: email,
-            full_name: fullName,
-          });
-
-        if (profileError) throw profileError;
-
-        router.push('/channels');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Sign up failed');
       }
+
+      const data = await response.json();
+      localStorage.setItem('auth_token', data.token);
+      router.push('/channels');
     } catch (err: any) {
       setError(err.message || 'An error occurred during sign up');
     } finally {
