@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/lib/auth-context';
-import { supabase, Channel } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,34 +8,43 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, LogOut, Loader2, Search, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
+type Channel = {
+  id: string;
+  name: string;
+  description: string;
+  avatar_url: string;
+  youtube_url: string;
+  created_at: string;
+};
+
 export default function ChannelsPage() {
-  const { user, loading: authLoading, signOut } = useAuth();
   const router = useRouter();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    if (!authLoading && !user) {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
       router.push('/login');
+      return;
     }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user) {
-      fetchChannels();
-    }
-  }, [user]);
+    fetchChannels();
+  }, [router]);
 
   const fetchChannels = async () => {
     try {
-      const { data, error } = await supabase
-        .from('channels')
-        .select('*')
-        .order('name');
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-      if (error) throw error;
-      setChannels(data || []);
+      if (!response.ok) throw new Error('Failed to fetch channels');
+
+      const data = await response.json();
+      setChannels(data.channels || []);
     } catch (error) {
       console.error('Error fetching channels:', error);
     } finally {
@@ -45,8 +52,8 @@ export default function ChannelsPage() {
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut();
+  const handleSignOut = () => {
+    localStorage.removeItem('auth_token');
     router.push('/login');
   };
 
@@ -55,7 +62,7 @@ export default function ChannelsPage() {
     channel.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (authLoading || loading) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FDF2F8]">
         <Loader2 className="h-8 w-8 animate-spin text-[#EF4444]" />

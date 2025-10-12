@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,14 +8,14 @@ import { MessageSquare, Lightbulb, Zap, Sparkles, ArrowRight, Play, Users, Heart
 import Link from 'next/link';
 
 export default function Home() {
-  const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user) {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
       router.push('/channels');
     }
-  }, [user, loading, router]);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-[#FDF2F8]">
