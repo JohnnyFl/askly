@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/cloudfront"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/s3"
@@ -276,96 +275,6 @@ func main() {
 			return err
 		}
 
-		// Make bucket public for CloudFront
-		_, err = s3.NewBucketPublicAccessBlock(ctx, "askly-frontend-public-access", &s3.BucketPublicAccessBlockArgs{
-			Bucket:                frontendBucket.ID(),
-			BlockPublicAcls:       pulumi.Bool(false),
-			BlockPublicPolicy:     pulumi.Bool(false),
-			IgnorePublicAcls:      pulumi.Bool(false),
-			RestrictPublicBuckets: pulumi.Bool(false),
-		})
-		if err != nil {
-			return err
-		}
-
-		// Bucket policy for CloudFront access
-		_, err = s3.NewBucketPolicy(ctx, "askly-frontend-policy", &s3.BucketPolicyArgs{
-			Bucket: frontendBucket.ID(),
-			Policy: pulumi.Sprintf(`{
-				"Version": "2012-10-17",
-				"Statement": [{
-					"Sid": "PublicReadGetObject",
-					"Effect": "Allow",
-					"Principal": "*",
-					"Action": "s3:GetObject",
-					"Resource": "arn:aws:s3:::%s/*"
-				}]
-			}`, frontendBucket.ID()),
-		})
-		if err != nil {
-			return err
-		}
-
-		// ===== CloudFront Distribution =====
-		cdn, err := cloudfront.NewDistribution(ctx, "askly-cdn", &cloudfront.DistributionArgs{
-			Origins: cloudfront.DistributionOriginArray{
-				&cloudfront.DistributionOriginArgs{
-					DomainName: frontendBucket.BucketRegionalDomainName,
-					OriginId:   pulumi.String("S3-askly-frontend"),
-				},
-			},
-			Enabled:           pulumi.Bool(true),
-			IsIpv6Enabled:     pulumi.Bool(true),
-			Comment:           pulumi.String("Askly POC CDN"),
-			DefaultRootObject: pulumi.String("index.html"),
-			DefaultCacheBehavior: &cloudfront.DistributionDefaultCacheBehaviorArgs{
-				AllowedMethods: pulumi.StringArray{
-					pulumi.String("GET"),
-					pulumi.String("HEAD"),
-					pulumi.String("OPTIONS"),
-				},
-				CachedMethods: pulumi.StringArray{
-					pulumi.String("GET"),
-					pulumi.String("HEAD"),
-				},
-				TargetOriginId:       pulumi.String("S3-askly-frontend"),
-				ViewerProtocolPolicy: pulumi.String("redirect-to-https"),
-				ForwardedValues: &cloudfront.DistributionDefaultCacheBehaviorForwardedValuesArgs{
-					QueryString: pulumi.Bool(false),
-					Cookies: &cloudfront.DistributionDefaultCacheBehaviorForwardedValuesCookiesArgs{
-						Forward: pulumi.String("none"),
-					},
-				},
-				MinTtl:     pulumi.Int(0),
-				DefaultTtl: pulumi.Int(3600),
-				MaxTtl:     pulumi.Int(86400),
-			},
-			// Custom error response for SPA routing
-			CustomErrorResponses: cloudfront.DistributionCustomErrorResponseArray{
-				&cloudfront.DistributionCustomErrorResponseArgs{
-					ErrorCode:        pulumi.Int(404),
-					ResponseCode:     pulumi.Int(200),
-					ResponsePagePath: pulumi.String("/index.html"),
-				},
-			},
-			PriceClass: pulumi.String("PriceClass_100"), // Use only North America and Europe
-			Restrictions: &cloudfront.DistributionRestrictionsArgs{
-				GeoRestriction: &cloudfront.DistributionRestrictionsGeoRestrictionArgs{
-					RestrictionType: pulumi.String("none"),
-				},
-			},
-			ViewerCertificate: &cloudfront.DistributionViewerCertificateArgs{
-				CloudfrontDefaultCertificate: pulumi.Bool(true),
-			},
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String("askly-cdn"),
-				"Environment": pulumi.String("poc"),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
 		// ===== IAM Role for Lambda Functions =====
 		lambdaRole, err := iam.NewRole(ctx, "askly-lambda-role", &iam.RoleArgs{
 			Name: pulumi.String("askly-lambda-execution-role"),
@@ -439,8 +348,6 @@ func main() {
 		ctx.Export("chunksTableName", chunksTable.Name)
 		ctx.Export("messagesTableName", messagesTable.Name)
 		ctx.Export("frontendBucketName", frontendBucket.ID())
-		ctx.Export("cloudFrontUrl", cdn.DomainName)
-		ctx.Export("cloudFrontDistributionId", cdn.ID())
 		ctx.Export("lambdaRoleArn", lambdaRole.Arn)
 
 		return nil
