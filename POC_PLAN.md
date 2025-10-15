@@ -430,20 +430,19 @@ askly/
 ### Phase 0: Infrastructure Setup (1-2 days)
 
 #### Day 1: Pulumi + AWS Setup
-- [ ] Update infra/main.go for POC infrastructure
-- [ ] Create 6 DynamoDB tables with on-demand billing:
+- [x] Update infra/main.go for POC infrastructure
+- [x] Create 6 DynamoDB tables with on-demand billing:
   - askly-users (PK, SK, GSI: email)
   - askly-admins (PK, SK, GSI: email)
   - askly-channels (PK, SK)
   - askly-transcriptions (PK, SK, GSI: channel_id-uploaded_at)
   - askly-chunks (PK, SK, GSI: channel_id, GSI: transcription_id-chunk_index)
   - askly-messages (PK, SK, GSI: user_id-created_at, GSI: channel_id-created_at)
-- [ ] Create S3 bucket for frontend static files (public read, website hosting)
-- [ ] Create CloudFront distribution pointing to S3 bucket
-- [ ] Create IAM roles for Lambda functions (DynamoDB + Bedrock permissions)
-- [ ] Set up API Gateway (REST API) with 8 routes
-- [ ] Deploy infrastructure with `pulumi up`
-- [ ] Note down all resource ARNs/endpoints (API Gateway URL, CloudFront URL)
+- [x] Create S3 bucket for frontend static files (website hosting)
+- [x] Create IAM roles for Lambda functions (DynamoDB + Bedrock permissions)
+- [ ] Set up API Gateway (REST API) with 8 routes (will add with Lambda functions in Phase 5)
+- [ ] Deploy infrastructure with `pulumi up` (requires user to set PULUMI_CONFIG_PASSPHRASE)
+- [ ] Note down all resource ARNs/endpoints after deployment
 - [ ] Seed 2 channels and 1 admin user in DynamoDB
 
 ### Phase 1: Backend Foundation (2-3 days)
