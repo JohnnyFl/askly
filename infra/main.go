@@ -855,7 +855,7 @@ func main() {
 			RestApi: api.ID(),
 			// Force new deployment on every update
 			Triggers: pulumi.StringMap{
-				"redeployment": pulumi.Sprintf("%v", "1"),
+				"redeployment": pulumi.Sprintf("%v", "2"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{
 			registerUserLambda,

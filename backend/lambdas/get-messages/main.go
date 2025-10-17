@@ -54,11 +54,14 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
 	}
 
-	// Get channel ID from query parameters
-	channelID := request.QueryStringParameters["channel_id"]
+	// Get channel ID from path parameters
+	channelID := request.PathParameters["id"]
 	if channelID == "" {
-		return response(http.StatusBadRequest, ErrorResponse{Error: "channel_id query parameter is required"})
+		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
 	}
+
+	// Add CHANNEL# prefix for DynamoDB query
+	channelID = "CHANNEL#" + channelID
 
 	// Initialize repository
 	messageRepo, err := repository.NewMessageRepository(ctx)

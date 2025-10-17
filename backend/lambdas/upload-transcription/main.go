@@ -16,7 +16,6 @@ import (
 )
 
 type UploadRequest struct {
-	ChannelID     string `json:"channel_id"`
 	VideoTitle    string `json:"video_title"`
 	VideoID       string `json:"video_id"`
 	VideoURL      string `json:"video_url"`
@@ -55,6 +54,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusForbidden, ErrorResponse{Error: "Admin access required"})
 	}
 
+	// Get channel ID from path parameters
+	channelID := request.PathParameters["id"]
+	if channelID == "" {
+		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
+	}
+
 	// Parse request body
 	var req UploadRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
@@ -62,8 +67,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Validate input
-	if req.ChannelID == "" || req.VideoTitle == "" || req.Transcription == "" {
-		return response(http.StatusBadRequest, ErrorResponse{Error: "channel_id, video_title, and transcription are required"})
+	if req.VideoTitle == "" || req.Transcription == "" {
+		return response(http.StatusBadRequest, ErrorResponse{Error: "video_title and transcription are required"})
 	}
 
 	// Initialize repositories
@@ -84,7 +89,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Verify channel exists
 	var channel models.Channel
-	channelPK := "CHANNEL#" + req.ChannelID
+	channelPK := "CHANNEL#" + channelID
 	if err := channelRepo.GetChannelByID(ctx, channelPK, &channel); err != nil {
 		return response(http.StatusNotFound, ErrorResponse{Error: "Channel not found"})
 	}
@@ -99,7 +104,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Create transcription record
 	adminID := claims.UserID
 	transcription := models.NewTranscription(
-		req.ChannelID,
+		channelPK,
 		req.VideoTitle,
 		req.VideoURL,
 		req.VideoID,
@@ -132,7 +137,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		// Create chunk record
 		chunk := models.NewTranscriptionChunk(
 			transcription.PK,
-			req.ChannelID,
+			channelPK,
 			chunkText,
 			i,
 			embeddingBytes,

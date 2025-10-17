@@ -427,7 +427,7 @@ askly/
 
 ## Implementation Plan
 
-### Phase 0: Infrastructure Setup (1-2 days) ✅ PARTIALLY COMPLETE
+### Phase 0: Infrastructure Setup (1-2 days) ✅ COMPLETE
 
 #### Day 1: Pulumi + AWS Setup
 - [x] Update infra/main.go for POC infrastructure
@@ -440,11 +440,11 @@ askly/
   - askly-messages (PK, SK, GSI: user_id-created_at, GSI: channel_id-created_at)
 - [x] Create S3 bucket for frontend static files (website hosting)
 - [x] Create IAM roles for Lambda functions (DynamoDB + Bedrock permissions)
-- [x] Create seed scripts for initial data (infra/seed/)
-- [ ] **IN PROGRESS**: Set up API Gateway (REST API) with 8 routes + Lambda integrations
-- [ ] **IN PROGRESS**: Deploy infrastructure with `pulumi up`
-- [ ] Note down all resource ARNs/endpoints after deployment
-- [ ] Seed 2 channels and 1 admin user in DynamoDB
+- [x] Set up API Gateway (REST API) with 8 routes + Lambda integrations
+- [x] Deploy infrastructure with `pulumi up`
+- [x] API Gateway URL: https://9qb0dac04h.execute-api.us-east-1.amazonaws.com/prod
+- [x] Seeded 2 channels (Startup Grind, Y Combinator) in DynamoDB
+- [x] Seed 1 admin user in DynamoDB for testing
 
 ### Phase 1: Backend Foundation (2-3 days) ✅ COMPLETE
 
@@ -457,7 +457,7 @@ askly/
 - [x] Implement Bedrock service wrapper (embed, chat)
 - [x] Implement text chunking service (600 words/chunk)
 - [x] Implement vector search service (cosine similarity)
-- [ ] Test locally with AWS credentials
+- [x] Test locally with AWS credentials
 
 #### Day 3: Auth Lambdas ✅
 - [x] Create register-user Lambda
@@ -472,7 +472,7 @@ askly/
   - Verify password
   - Generate JWT token
   - Return token + user/admin info
-- [ ] Test auth flow with AWS SAM Local or direct invocation
+- [x] Test auth flow with AWS SAM Local or direct invocation
 
 #### Day 4: Channel & Admin Lambdas ✅
 - [x] Create list-channels Lambda
@@ -516,8 +516,8 @@ askly/
   - Return chat history
 - [ ] Test with sample questions
 
-#### Day 7: Testing & Refinement ⏳ NEXT
-- [ ] **NEXT**: Upload 3-5 sample transcriptions for each channel
+#### Day 7: Testing & Refinement
+- [ ] Upload 3-5 sample transcriptions for each channel
 - [ ] Test various question types (factual, comparison, summary)
 - [ ] Measure Lambda performance (cold/warm start times)
 - [ ] Tune chunking (size, overlap if needed)
@@ -525,7 +525,7 @@ askly/
 - [ ] Add error handling and logging
 - [ ] Optimize Lambda memory settings (512 MB recommended)
 
-### Phase 3: Admin Frontend (1-2 days) ⏸️ NOT STARTED
+### Phase 3: Admin Frontend (1-2 days)
 
 #### Day 7: Admin Panel
 - [ ] Create /admin/login page
@@ -553,7 +553,7 @@ askly/
 #### Day 10-11: Deploy to AWS
 
 **Backend Deployment:** ⏳ IN PROGRESS
-- [ ] **IN PROGRESS**: Update Pulumi to deploy all 8 Lambda functions
+- [x] Update Pulumi to deploy all 8 Lambda functions
   - Build Go binaries for each lambda
   - Zip handlers with dependencies
   - Create Lambda resources in Pulumi

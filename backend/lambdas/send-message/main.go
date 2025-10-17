@@ -15,8 +15,7 @@ import (
 )
 
 type SendMessageRequest struct {
-	ChannelID string `json:"channel_id"`
-	Question  string `json:"question"`
+	Question string `json:"question"`
 }
 
 type SendMessageResponse struct {
@@ -55,6 +54,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
 	}
 
+	// Get channel ID from path parameters
+	channelID := request.PathParameters["id"]
+	if channelID == "" {
+		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
+	}
+
 	// Parse request body
 	var req SendMessageRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
@@ -62,8 +67,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Validate input
-	if req.ChannelID == "" || req.Question == "" {
-		return response(http.StatusBadRequest, ErrorResponse{Error: "channel_id and question are required"})
+	if req.Question == "" {
+		return response(http.StatusBadRequest, ErrorResponse{Error: "question is required"})
 	}
 
 	// Initialize repositories
@@ -79,7 +84,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Verify channel exists
 	var channel models.Channel
-	channelPK := "CHANNEL#" + req.ChannelID
+	channelPK := "CHANNEL#" + channelID
 	if err := channelRepo.GetChannelByID(ctx, channelPK, &channel); err != nil {
 		return response(http.StatusNotFound, ErrorResponse{Error: "Channel not found"})
 	}
@@ -100,7 +105,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Search for relevant chunks (top 5)
-	searchResults, err := vectorSearch.SearchByChannel(ctx, req.ChannelID, req.Question, 5)
+	searchResults, err := vectorSearch.SearchByChannel(ctx, channelID, req.Question, 5)
 	if err != nil {
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to search knowledge base"})
 	}
@@ -109,7 +114,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if len(searchResults) == 0 {
 		message := models.NewChatMessage(
 			claims.UserID,
-			req.ChannelID,
+			channelPK,
 			req.Question,
 			"I couldn't find any relevant information in this channel's videos to answer your question. The channel may not have any transcriptions uploaded yet.",
 			[]models.MessageSource{},
@@ -170,7 +175,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Create and save message
 	message := models.NewChatMessage(
 		claims.UserID,
-		req.ChannelID,
+		channelPK,
 		req.Question,
 		answer,
 		sources,
