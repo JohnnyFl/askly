@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -41,11 +43,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	token, err := auth.ExtractTokenFromHeader(authHeader)
 	if err != nil {
+		log.Printf("ERROR: Failed to extract token: %v", err)
 		return response(http.StatusUnauthorized, ErrorResponse{Error: "Missing or invalid authorization header"})
 	}
 
 	claims, err := auth.ValidateToken(token)
 	if err != nil {
+		log.Printf("ERROR: Token validation failed: %v", err)
 		return response(http.StatusUnauthorized, ErrorResponse{Error: "Invalid or expired token"})
 	}
 
@@ -57,8 +61,11 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Get channel ID from path parameters
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
+		log.Printf("ERROR: Channel ID missing from path parameters")
 		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
 	}
+
+	log.Printf("INFO: Fetching messages for channel: %s, user: %s", channelID, claims.UserID)
 
 	// Add CHANNEL# prefix for DynamoDB query
 	channelID = "CHANNEL#" + channelID
@@ -66,19 +73,24 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Initialize repository
 	messageRepo, err := repository.NewMessageRepository(ctx)
 	if err != nil {
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+		log.Printf("ERROR: Failed to initialize message repository: %v", err)
+		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
 	}
 
 	// Get messages for this user and channel
 	var messages []*models.ChatMessage
 	if err := messageRepo.ListMessagesByChannel(ctx, channelID, &messages); err != nil {
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to fetch messages"})
+		log.Printf("ERROR: Failed to fetch messages from DynamoDB for channel %s: %v", channelID, err)
+		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to fetch messages: %v", err)})
 	}
+
+	log.Printf("INFO: Found %d total messages for channel %s", len(messages), channelID)
 
 	// Filter messages by user (since we query by channel, need to filter)
 	var userMessages []MessageResponse
+	userIDWithPrefix := "USER#" + claims.UserID
 	for _, msg := range messages {
-		if msg.UserID == claims.UserID {
+		if msg.UserID == userIDWithPrefix || msg.UserID == claims.UserID {
 			userMessages = append(userMessages, MessageResponse{
 				ID:        strings.TrimPrefix(msg.PK, "MESSAGE#"),
 				UserID:    msg.UserID,
@@ -90,6 +102,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			})
 		}
 	}
+
+	log.Printf("INFO: Returning %d messages for user %s", len(userMessages), claims.UserID)
 
 	return response(http.StatusOK, GetMessagesResponse{
 		Messages: userMessages,
