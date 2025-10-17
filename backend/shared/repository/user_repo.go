@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 )
 
 const (
@@ -47,17 +49,20 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID string, result 
 
 // GetUserByEmail gets a user by email using GSI
 func (r *UserRepository) GetUserByEmail(ctx context.Context, email string, result interface{}) error {
-	var users []map[string]interface{}
-	if err := r.db.QueryByGSI(ctx, r.tableName, "email-index", "email", email, &users); err != nil {
+	items, err := r.db.QueryByGSIRaw(ctx, r.tableName, "email-index", "email", email)
+	if err != nil {
 		return err
 	}
 
-	if len(users) == 0 {
+	if len(items) == 0 {
 		return fmt.Errorf("user not found")
 	}
 
-	// For simplicity, return the first match
-	// In production, handle multiple matches appropriately
+	// Unmarshal the first user into the result
+	if err := attributevalue.UnmarshalMap(items[0], result); err != nil {
+		return fmt.Errorf("failed to unmarshal user: %w", err)
+	}
+
 	return nil
 }
 
@@ -107,13 +112,18 @@ func (r *AdminRepository) GetAdminByID(ctx context.Context, adminID string, resu
 
 // GetAdminByEmail gets an admin by email using GSI
 func (r *AdminRepository) GetAdminByEmail(ctx context.Context, email string, result interface{}) error {
-	var admins []map[string]interface{}
-	if err := r.db.QueryByGSI(ctx, r.tableName, "email-index", "email", email, &admins); err != nil {
+	items, err := r.db.QueryByGSIRaw(ctx, r.tableName, "email-index", "email", email)
+	if err != nil {
 		return err
 	}
 
-	if len(admins) == 0 {
+	if len(items) == 0 {
 		return fmt.Errorf("admin not found")
+	}
+
+	// Unmarshal the first admin into the result
+	if err := attributevalue.UnmarshalMap(items[0], result); err != nil {
+		return fmt.Errorf("failed to unmarshal admin: %w", err)
 	}
 
 	return nil

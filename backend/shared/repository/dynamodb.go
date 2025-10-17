@@ -117,11 +117,34 @@ func (r *DynamoDBRepository) QueryByGSI(ctx context.Context, tableName, indexNam
 		return fmt.Errorf("failed to query GSI: %w", err)
 	}
 
+	if len(output.Items) == 0 {
+		return fmt.Errorf("no items found")
+	}
+
 	if err := attributevalue.UnmarshalListOfMaps(output.Items, results); err != nil {
 		return fmt.Errorf("failed to unmarshal results: %w", err)
 	}
 
 	return nil
+}
+
+// QueryByGSIRaw queries items using a Global Secondary Index and returns raw DynamoDB items
+func (r *DynamoDBRepository) QueryByGSIRaw(ctx context.Context, tableName, indexName, keyName, keyValue string) ([]map[string]types.AttributeValue, error) {
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String(tableName),
+		IndexName:              aws.String(indexName),
+		KeyConditionExpression: aws.String(fmt.Sprintf("%s = :key", keyName)),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":key": &types.AttributeValueMemberS{Value: keyValue},
+		},
+	}
+
+	output, err := r.client.Query(ctx, input)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query GSI: %w", err)
+	}
+
+	return output.Items, nil
 }
 
 // Scan scans all items in a table (use sparingly)
