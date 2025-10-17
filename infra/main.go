@@ -347,9 +347,9 @@ func main() {
 		jwtSecret := pulumi.String("your-super-secret-jwt-key-change-in-production")
 
 		// Lambda environment variables
+		// Note: AWS_REGION is automatically set by Lambda, don't include it here
 		lambdaEnv := &lambda.FunctionEnvironmentArgs{
 			Variables: pulumi.StringMap{
-				"AWS_REGION":                    pulumi.String("us-east-1"),
 				"DYNAMODB_USERS_TABLE":          usersTable.Name,
 				"DYNAMODB_ADMINS_TABLE":         adminsTable.Name,
 				"DYNAMODB_CHANNELS_TABLE":       channelsTable.Name,
