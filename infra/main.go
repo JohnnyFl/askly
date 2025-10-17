@@ -1,8 +1,10 @@
 package main
 
 import (
+	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
+	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/lambda"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/s3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -340,6 +342,549 @@ func main() {
 			return err
 		}
 
+		// ===== Lambda Functions =====
+		// JWT Secret for Lambda environment
+		jwtSecret := pulumi.String("your-super-secret-jwt-key-change-in-production")
+
+		// Lambda environment variables
+		lambdaEnv := &lambda.FunctionEnvironmentArgs{
+			Variables: pulumi.StringMap{
+				"AWS_REGION":                    pulumi.String("us-east-1"),
+				"DYNAMODB_USERS_TABLE":          usersTable.Name,
+				"DYNAMODB_ADMINS_TABLE":         adminsTable.Name,
+				"DYNAMODB_CHANNELS_TABLE":       channelsTable.Name,
+				"DYNAMODB_TRANSCRIPTIONS_TABLE": transcriptionsTable.Name,
+				"DYNAMODB_CHUNKS_TABLE":         chunksTable.Name,
+				"DYNAMODB_MESSAGES_TABLE":       messagesTable.Name,
+				"BEDROCK_EMBEDDING_MODEL":       pulumi.String("amazon.titan-embed-text-v2:0"),
+				"BEDROCK_CHAT_MODEL":            pulumi.String("anthropic.claude-3-haiku-20240307-v1:0"),
+				"JWT_SECRET":                    jwtSecret,
+			},
+		}
+
+		// Lambda: register-user
+		registerUserLambda, err := lambda.NewFunction(ctx, "register-user", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-register-user"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/register-user"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-register-user"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: login-user
+		loginUserLambda, err := lambda.NewFunction(ctx, "login-user", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-login-user"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/login-user"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-login-user"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: login-admin
+		loginAdminLambda, err := lambda.NewFunction(ctx, "login-admin", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-login-admin"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/login-admin"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-login-admin"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: list-channels
+		listChannelsLambda, err := lambda.NewFunction(ctx, "list-channels", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-list-channels"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/list-channels"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-list-channels"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: get-channel
+		getChannelLambda, err := lambda.NewFunction(ctx, "get-channel", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-get-channel"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/get-channel"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-get-channel"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: upload-transcription
+		uploadTranscriptionLambda, err := lambda.NewFunction(ctx, "upload-transcription", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-upload-transcription"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/upload-transcription"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(1024),
+			Timeout:     pulumi.Int(60),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-upload-transcription"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: send-message (chat-ask)
+		sendMessageLambda, err := lambda.NewFunction(ctx, "send-message", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-send-message"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/send-message"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(1024),
+			Timeout:     pulumi.Int(60),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-send-message"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: get-messages (chat-history)
+		getMessagesLambda, err := lambda.NewFunction(ctx, "get-messages", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-get-messages"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/get-messages"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-get-messages"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// ===== API Gateway =====
+		// Create REST API
+		api, err := apigateway.NewRestApi(ctx, "askly-api", &apigateway.RestApiArgs{
+			Name:        pulumi.String("askly-api"),
+			Description: pulumi.String("Askly POC API Gateway"),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-api"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Get root resource
+		rootResourceID := api.RootResourceId
+
+		// Helper function to create API Gateway resources and methods
+		createAPIRoute := func(pathPart string, parentID pulumi.IDOutput, method string, lambdaFn *lambda.Function, routeName string) error {
+			// Create resource
+			resource, err := apigateway.NewResource(ctx, routeName+"-resource", &apigateway.ResourceArgs{
+				RestApi:  api.ID(),
+				ParentId: parentID,
+				PathPart: pulumi.String(pathPart),
+			})
+			if err != nil {
+				return err
+			}
+
+			// Create method
+			_, err = apigateway.NewMethod(ctx, routeName+"-method", &apigateway.MethodArgs{
+				RestApi:       api.ID(),
+				ResourceId:    resource.ID(),
+				HttpMethod:    pulumi.String(method),
+				Authorization: pulumi.String("NONE"),
+			})
+			if err != nil {
+				return err
+			}
+
+			// Create integration
+			_, err = apigateway.NewIntegration(ctx, routeName+"-integration", &apigateway.IntegrationArgs{
+				RestApi:               api.ID(),
+				ResourceId:            resource.ID(),
+				HttpMethod:            pulumi.String(method),
+				IntegrationHttpMethod: pulumi.String("POST"),
+				Type:                  pulumi.String("AWS_PROXY"),
+				Uri:                   lambdaFn.InvokeArn,
+			})
+			if err != nil {
+				return err
+			}
+
+			// Grant API Gateway permission to invoke Lambda
+			_, err = lambda.NewPermission(ctx, routeName+"-permission", &lambda.PermissionArgs{
+				Action:    pulumi.String("lambda:InvokeFunction"),
+				Function:  lambdaFn.Name,
+				Principal: pulumi.String("apigateway.amazonaws.com"),
+				SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+			})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		// Create /auth resource
+		authResource, err := apigateway.NewResource(ctx, "auth-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: rootResourceID,
+			PathPart: pulumi.String("auth"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// POST /auth/register
+		err = createAPIRoute("register", authResource.ID(), "POST", registerUserLambda, "auth-register")
+		if err != nil {
+			return err
+		}
+
+		// POST /auth/login
+		err = createAPIRoute("login", authResource.ID(), "POST", loginUserLambda, "auth-login")
+		if err != nil {
+			return err
+		}
+
+		// Create /admin resource
+		adminResource, err := apigateway.NewResource(ctx, "admin-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: rootResourceID,
+			PathPart: pulumi.String("admin"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// POST /admin/login
+		err = createAPIRoute("login", adminResource.ID(), "POST", loginAdminLambda, "admin-login")
+		if err != nil {
+			return err
+		}
+
+		// Create /channels resource
+		channelsResource, err := apigateway.NewResource(ctx, "channels-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: rootResourceID,
+			PathPart: pulumi.String("channels"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /channels
+		_, err = apigateway.NewMethod(ctx, "channels-list-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    channelsResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("NONE"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "channels-list-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            channelsResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   listChannelsLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "channels-list-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  listChannelsLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create /channels/{id} resource
+		channelIDResource, err := apigateway.NewResource(ctx, "channel-id-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: channelsResource.ID(),
+			PathPart: pulumi.String("{id}"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /channels/{id}
+		_, err = apigateway.NewMethod(ctx, "channel-get-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    channelIDResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("NONE"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "channel-get-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            channelIDResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   getChannelLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "channel-get-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  getChannelLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// POST /channels/{id}/ask
+		askResource, err := apigateway.NewResource(ctx, "channel-ask-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: channelIDResource.ID(),
+			PathPart: pulumi.String("ask"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "channel-ask-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    askResource.ID(),
+			HttpMethod:    pulumi.String("POST"),
+			Authorization: pulumi.String("NONE"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "channel-ask-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            askResource.ID(),
+			HttpMethod:            pulumi.String("POST"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   sendMessageLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "channel-ask-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  sendMessageLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /channels/{id}/messages
+		messagesResource, err := apigateway.NewResource(ctx, "channel-messages-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: channelIDResource.ID(),
+			PathPart: pulumi.String("messages"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "channel-messages-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    messagesResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("NONE"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "channel-messages-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            messagesResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   getMessagesLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "channel-messages-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  getMessagesLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create /admin/channels/{id}/transcriptions route
+		adminChannelsResource, err := apigateway.NewResource(ctx, "admin-channels-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: adminResource.ID(),
+			PathPart: pulumi.String("channels"),
+		})
+		if err != nil {
+			return err
+		}
+
+		adminChannelIDResource, err := apigateway.NewResource(ctx, "admin-channel-id-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: adminChannelsResource.ID(),
+			PathPart: pulumi.String("{id}"),
+		})
+		if err != nil {
+			return err
+		}
+
+		adminTranscriptionsResource, err := apigateway.NewResource(ctx, "admin-transcriptions-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: adminChannelIDResource.ID(),
+			PathPart: pulumi.String("transcriptions"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// POST /admin/channels/{id}/transcriptions
+		_, err = apigateway.NewMethod(ctx, "admin-upload-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminTranscriptionsResource.ID(),
+			HttpMethod:    pulumi.String("POST"),
+			Authorization: pulumi.String("NONE"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "admin-upload-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminTranscriptionsResource.ID(),
+			HttpMethod:            pulumi.String("POST"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   uploadTranscriptionLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "admin-upload-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  uploadTranscriptionLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Deploy API Gateway
+		deployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
+			RestApi: api.ID(),
+			// Force new deployment on every update
+			Triggers: pulumi.StringMap{
+				"redeployment": pulumi.Sprintf("%v", "1"),
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{
+			registerUserLambda,
+			loginUserLambda,
+			loginAdminLambda,
+			listChannelsLambda,
+			getChannelLambda,
+			uploadTranscriptionLambda,
+			sendMessageLambda,
+			getMessagesLambda,
+		}))
+		if err != nil {
+			return err
+		}
+
+		// Create stage
+		stage, err := apigateway.NewStage(ctx, "api-stage", &apigateway.StageArgs{
+			RestApi:    api.ID(),
+			Deployment: deployment.ID(),
+			StageName:  pulumi.String("prod"),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-api-prod"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
 		// ===== Exports =====
 		ctx.Export("usersTableName", usersTable.Name)
 		ctx.Export("adminsTableName", adminsTable.Name)
@@ -349,6 +894,8 @@ func main() {
 		ctx.Export("messagesTableName", messagesTable.Name)
 		ctx.Export("frontendBucketName", frontendBucket.ID())
 		ctx.Export("lambdaRoleArn", lambdaRole.Arn)
+		ctx.Export("apiGatewayURL", pulumi.Sprintf("https://%s.execute-api.us-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
+		ctx.Export("apiGatewayID", api.ID())
 
 		return nil
 	})

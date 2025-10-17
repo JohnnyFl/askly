@@ -427,7 +427,7 @@ askly/
 
 ## Implementation Plan
 
-### Phase 0: Infrastructure Setup (1-2 days)
+### Phase 0: Infrastructure Setup (1-2 days) ✅ PARTIALLY COMPLETE
 
 #### Day 1: Pulumi + AWS Setup
 - [x] Update infra/main.go for POC infrastructure
@@ -440,53 +440,56 @@ askly/
   - askly-messages (PK, SK, GSI: user_id-created_at, GSI: channel_id-created_at)
 - [x] Create S3 bucket for frontend static files (website hosting)
 - [x] Create IAM roles for Lambda functions (DynamoDB + Bedrock permissions)
-- [ ] Set up API Gateway (REST API) with 8 routes (will add with Lambda functions in Phase 5)
-- [ ] Deploy infrastructure with `pulumi up` (requires user to set PULUMI_CONFIG_PASSPHRASE)
+- [x] Create seed scripts for initial data (infra/seed/)
+- [ ] **IN PROGRESS**: Set up API Gateway (REST API) with 8 routes + Lambda integrations
+- [ ] **IN PROGRESS**: Deploy infrastructure with `pulumi up`
 - [ ] Note down all resource ARNs/endpoints after deployment
 - [ ] Seed 2 channels and 1 admin user in DynamoDB
 
-### Phase 1: Backend Foundation (2-3 days)
+### Phase 1: Backend Foundation (2-3 days) ✅ COMPLETE
 
-#### Day 2: Shared Code Setup
-- [ ] Create backend/shared/ directory
-- [ ] Implement shared models (User, Channel, Transcription, Message)
-- [ ] Implement DynamoDB repository layer (CRUD operations)
-- [ ] Implement JWT utilities (generate, verify)
-- [ ] Implement Bedrock service wrapper (embed, chat)
-- [ ] Implement text chunking service (600 words/chunk)
-- [ ] Implement vector search service (cosine similarity)
+#### Day 2: Shared Code Setup ✅
+- [x] Create backend/shared/ directory
+- [x] Implement shared models (User, Channel, Transcription, Message)
+- [x] Implement DynamoDB repository layer (CRUD operations)
+- [x] Implement JWT utilities (generate, verify)
+- [x] Implement password hashing utilities (bcrypt)
+- [x] Implement Bedrock service wrapper (embed, chat)
+- [x] Implement text chunking service (600 words/chunk)
+- [x] Implement vector search service (cosine similarity)
 - [ ] Test locally with AWS credentials
 
-#### Day 3: Auth Lambdas
-- [ ] Create lambda-auth-register
+#### Day 3: Auth Lambdas ✅
+- [x] Create register-user Lambda
   - Accept email/password
   - Hash password with bcrypt
   - Store in DynamoDB Users table
   - Generate JWT token
   - Return token + user info
-- [ ] Create lambda-auth-login
+- [x] Create login-user Lambda (user authentication)
+- [x] Create login-admin Lambda (admin authentication)
   - Support both user and admin login
   - Verify password
   - Generate JWT token
   - Return token + user/admin info
 - [ ] Test auth flow with AWS SAM Local or direct invocation
 
-#### Day 4: Channel & Admin List Lambdas
-- [ ] Create lambda-channels-list
+#### Day 4: Channel & Admin Lambdas ✅
+- [x] Create list-channels Lambda
   - Query DynamoDB Channels table
   - Return array of channels
-- [ ] Create lambda-channels-get
+- [x] Create get-channel Lambda
   - Get single channel by ID
   - Return channel details
-- [ ] Create lambda-admin-list
+- [x] Create get-messages Lambda (list transcriptions/messages)
   - List transcriptions for a channel
   - Return array from Transcriptions table
 - [ ] Test with sample data
 
-### Phase 2: RAG System (2-3 days)
+### Phase 2: RAG System (2-3 days) ✅ PARTIALLY COMPLETE
 
-#### Day 5: Admin Upload Lambda
-- [ ] Create lambda-admin-upload
+#### Day 5: Admin Upload Lambda ✅
+- [x] Create upload-transcription Lambda
   - Parse multipart form data from API Gateway
   - Extract video title, URL, transcription text
   - Chunk transcription (600 words per chunk)
@@ -497,8 +500,8 @@ askly/
   - Return success + chunk count
 - [ ] Test upload with sample video transcription
 
-#### Day 6: Chat Lambda with Vector Search
-- [ ] Create lambda-chat-ask
+#### Day 6: Chat Lambda with Vector Search ✅
+- [x] Create send-message Lambda (chat-ask equivalent)
   - **Cold start logic**: Scan all chunks from DynamoDB, load into memory
   - Parse question from request
   - Call Bedrock Titan Embed for question
@@ -508,13 +511,13 @@ askly/
   - Parse answer
   - Store question + answer in ChatMessages table
   - Return answer + sources
-- [ ] Create lambda-chat-history
+- [x] Create get-messages Lambda (chat-history equivalent)
   - Query ChatMessages by channel_id
   - Return chat history
 - [ ] Test with sample questions
 
-#### Day 7: Testing & Refinement
-- [ ] Upload 3-5 sample transcriptions for each channel
+#### Day 7: Testing & Refinement ⏳ NEXT
+- [ ] **NEXT**: Upload 3-5 sample transcriptions for each channel
 - [ ] Test various question types (factual, comparison, summary)
 - [ ] Measure Lambda performance (cold/warm start times)
 - [ ] Tune chunking (size, overlap if needed)
@@ -522,7 +525,7 @@ askly/
 - [ ] Add error handling and logging
 - [ ] Optimize Lambda memory settings (512 MB recommended)
 
-### Phase 3: Admin Frontend (1-2 days)
+### Phase 3: Admin Frontend (1-2 days) ⏸️ NOT STARTED
 
 #### Day 7: Admin Panel
 - [ ] Create /admin/login page
@@ -533,7 +536,7 @@ askly/
 - [ ] Connect to backend APIs
 - [ ] Test admin flow end-to-end
 
-### Phase 4: User Frontend (1-2 days)
+### Phase 4: User Frontend (1-2 days) ⏸️ NOT STARTED
 
 #### Day 8-9: Chat Interface
 - [ ] Update /channels page to fetch from API
@@ -545,29 +548,29 @@ askly/
 - [ ] Add error handling
 - [ ] Test full user flow
 
-### Phase 5: Deployment (1-2 days)
+### Phase 5: Deployment (1-2 days) ⏳ IN PROGRESS
 
 #### Day 10-11: Deploy to AWS
 
-**Backend Deployment:**
-- [ ] Update Pulumi to deploy all 8 Lambda functions
+**Backend Deployment:** ⏳ IN PROGRESS
+- [ ] **IN PROGRESS**: Update Pulumi to deploy all 8 Lambda functions
   - Build Go binaries for each lambda
   - Zip handlers with dependencies
   - Create Lambda resources in Pulumi
 - [ ] Configure Lambda environment variables (DynamoDB tables, Bedrock models, JWT secret)
-- [ ] Set up API Gateway with 8 routes:
-  - POST /api/auth/register → lambda-auth-register
-  - POST /api/auth/login → lambda-auth-login
-  - GET /api/channels → lambda-channels-list
-  - GET /api/channels/{id} → lambda-channels-get
-  - POST /api/admin/channels/{id}/transcriptions → lambda-admin-upload
-  - GET /api/admin/channels/{id}/transcriptions → lambda-admin-list
-  - POST /api/channels/{id}/ask → lambda-chat-ask
-  - GET /api/channels/{id}/messages → lambda-chat-history
-- [ ] Deploy infrastructure: `pulumi up`
+- [ ] **IN PROGRESS**: Set up API Gateway with 8 routes:
+  - POST /api/auth/register → register-user
+  - POST /api/auth/login → login-user
+  - POST /api/admin/login → login-admin
+  - GET /api/channels → list-channels
+  - GET /api/channels/{id} → get-channel
+  - POST /api/admin/channels/{id}/transcriptions → upload-transcription
+  - POST /api/channels/{id}/ask → send-message
+  - GET /api/channels/{id}/messages → get-messages
+- [ ] **NEXT**: Deploy infrastructure: `pulumi up`
 - [ ] Test each Lambda endpoint with curl/Postman
 
-**Frontend Deployment:**
+**Frontend Deployment:** ⏸️ NOT STARTED
 - [ ] Configure Next.js for static export
   - Update next.config.js: `output: 'export'`
   - Set NEXT_PUBLIC_API_URL to API Gateway URL

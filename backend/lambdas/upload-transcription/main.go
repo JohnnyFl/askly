@@ -97,12 +97,14 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Create transcription record
+	adminID := claims.UserID
 	transcription := models.NewTranscription(
 		req.ChannelID,
 		req.VideoTitle,
-		req.VideoID,
 		req.VideoURL,
+		req.VideoID,
 		req.Transcription,
+		"ADMIN#"+adminID,
 	)
 
 	if err := transcriptionRepo.CreateTranscription(ctx, transcription); err != nil {
@@ -129,11 +131,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 		// Create chunk record
 		chunk := models.NewTranscriptionChunk(
-			transcriptionID,
+			transcription.PK,
 			req.ChannelID,
-			req.VideoTitle,
-			i,
 			chunkText,
+			i,
 			embeddingBytes,
 		)
 
@@ -142,15 +143,6 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			fmt.Printf("Failed to store chunk %d: %v\n", i, err)
 			continue
 		}
-	}
-
-	// Update channel video count
-	updates := map[string]interface{}{
-		"video_count": channel.VideoCount + 1,
-	}
-	if err := channelRepo.UpdateChannel(ctx, channelPK, updates); err != nil {
-		// Log error but don't fail the request
-		fmt.Printf("Failed to update channel video count: %v\n", err)
 	}
 
 	return response(http.StatusCreated, UploadResponse{

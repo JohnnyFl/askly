@@ -127,18 +127,32 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		})
 	}
 
+	// Initialize transcription repository to get video details
+	transcriptionRepo, err := repository.NewTranscriptionRepository(ctx)
+	if err != nil {
+		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+	}
+
 	// Extract context chunks and sources
 	contextChunks := make([]string, len(searchResults))
-	sources := make([]models.MessageSource, len(searchResults))
+	sources := make([]models.MessageSource, 0, len(searchResults))
 
 	for i, result := range searchResults {
 		contextChunks[i] = result.Chunk.ChunkText
-		sources[i] = models.MessageSource{
-			VideoTitle:   result.Chunk.VideoTitle,
-			ChunkIndex:   result.Chunk.ChunkIndex,
-			Similarity:   result.Similarity,
-			ChunkPreview: truncate(result.Chunk.ChunkText, 200),
+
+		// Get transcription details to populate video info
+		var transcription models.Transcription
+		if err := transcriptionRepo.GetTranscriptionByID(ctx, result.Chunk.TranscriptionID, &transcription); err != nil {
+			// If we can't get transcription, skip this source
+			continue
 		}
+
+		sources = append(sources, models.MessageSource{
+			VideoTitle:     transcription.VideoTitle,
+			VideoURL:       transcription.VideoURL,
+			ChunkIndex:     result.Chunk.ChunkIndex,
+			RelevanceScore: float64(result.Similarity),
+		})
 	}
 
 	// Initialize Bedrock service

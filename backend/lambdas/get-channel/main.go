@@ -20,7 +20,7 @@ type ChannelResponse struct {
 	YoutubeChannelID string `json:"youtube_channel_id"`
 	Description      string `json:"description"`
 	ThumbnailURL     string `json:"thumbnail_url"`
-	VideoCount       int    `json:"video_count"`
+	YoutubeURL       string `json:"youtube_url"`
 }
 
 type ErrorResponse struct {
@@ -75,7 +75,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		YoutubeChannelID: channel.YoutubeChannelID,
 		Description:      channel.Description,
 		ThumbnailURL:     channel.ThumbnailURL,
-		VideoCount:       channel.VideoCount,
+		YoutubeURL:       channel.YoutubeURL,
 	}
 
 	return response(http.StatusOK, channelResponse)
