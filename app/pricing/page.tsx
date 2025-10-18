@@ -97,7 +97,9 @@ export default function PricingPage() {
               </div>
               <nav className="hidden md:flex gap-8 text-slate-700 font-medium">
                 <Link href="/" className="hover:text-[#EF4444] transition-colors">Home</Link>
+                <a href="/#features" className="hover:text-[#EF4444] transition-colors">Features</a>
                 <Link href="/pricing" className="text-[#EF4444]">Pricing</Link>
+                <a href="/#community" className="hover:text-[#EF4444] transition-colors">Community</a>
               </nav>
               <div className="flex gap-3">
                 <Link href="/login">
