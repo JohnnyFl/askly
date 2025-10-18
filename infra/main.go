@@ -5,7 +5,6 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/lambda"
-	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/s3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -251,32 +250,6 @@ func main() {
 			return err
 		}
 
-		// ===== S3 Bucket for Frontend =====
-		frontendBucket, err := s3.NewBucket(ctx, "askly-frontend", &s3.BucketArgs{
-			Bucket: pulumi.String("askly-frontend-poc"),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String("askly-frontend"),
-				"Environment": pulumi.String("poc"),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Configure bucket for website hosting
-		_, err = s3.NewBucketWebsiteConfigurationV2(ctx, "askly-frontend-website", &s3.BucketWebsiteConfigurationV2Args{
-			Bucket: frontendBucket.ID(),
-			IndexDocument: &s3.BucketWebsiteConfigurationV2IndexDocumentArgs{
-				Suffix: pulumi.String("index.html"),
-			},
-			ErrorDocument: &s3.BucketWebsiteConfigurationV2ErrorDocumentArgs{
-				Key: pulumi.String("index.html"), // SPA fallback
-			},
-		})
-		if err != nil {
-			return err
-		}
-
 		// ===== IAM Role for Lambda Functions =====
 		lambdaRole, err := iam.NewRole(ctx, "askly-lambda-role", &iam.RoleArgs{
 			Name: pulumi.String("askly-lambda-execution-role"),
@@ -329,12 +302,14 @@ func main() {
 						]
 					},
 					{
-						"Effect": "Allow",
-						"Action": [
-							"bedrock:InvokeModel"
-						],
-						"Resource": "*"
-					}
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:ListFoundationModels",
+                "bedrock:GetFoundationModel"
+            ],
+            "Resource": "*"
+        }
 				]
 			}`),
 		})
@@ -892,7 +867,6 @@ func main() {
 		ctx.Export("transcriptionsTableName", transcriptionsTable.Name)
 		ctx.Export("chunksTableName", chunksTable.Name)
 		ctx.Export("messagesTableName", messagesTable.Name)
-		ctx.Export("frontendBucketName", frontendBucket.ID())
 		ctx.Export("lambdaRoleArn", lambdaRole.Arn)
 		ctx.Export("apiGatewayURL", pulumi.Sprintf("https://%s.execute-api.us-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
 		ctx.Export("apiGatewayID", api.ID())

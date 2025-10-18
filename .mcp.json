@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "aws_knowledge_base": {
-      "type": "http",
-      "url": "https://knowledge-mcp.global.api.aws"
+    "aws-knowledge-mcp-server": {
+      "url": "https://knowledge-mcp.global.api.aws",
+      "type": "http"
     }
   }
 }

@@ -484,7 +484,7 @@ askly/
 - [x] Create get-messages Lambda (list transcriptions/messages)
   - List transcriptions for a channel
   - Return array from Transcriptions table
-- [ ] Test with sample data
+- [x] Test with sample data
 
 ### Phase 2: RAG System (2-3 days) ✅ PARTIALLY COMPLETE
 
@@ -498,7 +498,7 @@ askly/
   - Store chunks + embeddings in DynamoDB TranscriptionChunks table
   - Store transcription metadata in Transcriptions table
   - Return success + chunk count
-- [ ] Test upload with sample video transcription
+- [] Test upload with sample video transcription
 
 #### Day 6: Chat Lambda with Vector Search ✅
 - [x] Create send-message Lambda (chat-ask equivalent)
