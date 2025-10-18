@@ -9,7 +9,6 @@ import Link from 'next/link';
 import { AnimatedCounter } from '@/components/animations/AnimatedCounter';
 import { TypingAnimation } from '@/components/animations/TypingAnimation';
 import { FadeInWhenVisible } from '@/components/animations/FadeInWhenVisible';
-import { LiveActivityFeed } from '@/components/animations/LiveActivityFeed';
 
 export default function Home() {
   const router = useRouter();
@@ -24,8 +23,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#FDF2F8] relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-pink-50/50 to-purple-50/30 animate-gradient-y"></div>
-
-      <LiveActivityFeed />
 
       <div className="relative z-10">
         <div className="max-w-[1400px] mx-auto p-8">
@@ -65,7 +62,7 @@ export default function Home() {
                     Connect with Your Favorite Creators
                   </div>
 
-                  <h1 className="text-5xl font-bold text-slate-900 leading-tight">
+                  <h1 className="text-5xl font-bold text-slate-900 leading-tight min-h-[140px] flex items-center">
                     <TypingAnimation
                       texts={[
                         'Learn from Creators You Love',
