@@ -56,7 +56,11 @@ export default function AccountPage() {
   };
 
   const handleManageSubscription = () => {
-    router.push('/pricing');
+    if (subscription === 'FREE') {
+      router.push('/pricing');
+    } else {
+      window.open('https://polar.sh/purchases', '_blank');
+    }
   };
 
   if (loading) {

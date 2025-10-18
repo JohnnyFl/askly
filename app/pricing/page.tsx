@@ -43,40 +43,25 @@ export default function PricingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleSubscribe = async (tierId: string) => {
+  const handleSubscribe = (tierId: string) => {
     if (tierId === 'FREE') {
       router.push('/signup');
       return;
     }
 
     setLoading(tierId);
-    try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        router.push('/login');
-        return;
-      }
 
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tier: tierId }),
-      });
-
-      if (!response.ok) throw new Error('Failed to create checkout');
-
-      const data = await response.json();
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-      }
-    } catch (error) {
-      console.error('Error creating checkout:', error);
-    } finally {
+    const tier = SUBSCRIPTION_TIERS[tierId as keyof typeof SUBSCRIPTION_TIERS];
+    if (!tier.productId) {
+      console.error('Product ID not configured for tier:', tierId);
       setLoading(null);
+      return;
     }
+
+    const userEmail = localStorage.getItem('user_email');
+    const checkoutUrl = `https://polar.sh/${process.env.NEXT_PUBLIC_POLAR_ORGANIZATION_ID}/products/${tier.productId}/checkout${userEmail ? `?customer_email=${encodeURIComponent(userEmail)}` : ''}`;
+
+    window.location.href = checkoutUrl;
   };
 
   return (

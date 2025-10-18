@@ -2,7 +2,7 @@ export const SUBSCRIPTION_TIERS = {
   FREE: {
     name: "Free",
     price: 0,
-    priceId: null,
+    productId: null,
     questionsPerMonth: 10,
     features: [
       "10 questions per month",
@@ -14,7 +14,7 @@ export const SUBSCRIPTION_TIERS = {
   PRO: {
     name: "Pro",
     price: 9.99,
-    priceId: process.env.NEXT_PUBLIC_POLAR_PRO_PRICE_ID,
+    productId: process.env.NEXT_PUBLIC_POLAR_PRO_PRODUCT_ID,
     questionsPerMonth: 100,
     features: [
       "100 questions per month",
@@ -27,7 +27,7 @@ export const SUBSCRIPTION_TIERS = {
   PREMIUM: {
     name: "Premium",
     price: 19.99,
-    priceId: process.env.NEXT_PUBLIC_POLAR_PREMIUM_PRICE_ID,
+    productId: process.env.NEXT_PUBLIC_POLAR_PREMIUM_PRODUCT_ID,
     questionsPerMonth: -1,
     features: [
       "Unlimited questions",
@@ -41,3 +41,23 @@ export const SUBSCRIPTION_TIERS = {
 } as const;
 
 export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
+
+export const POLAR_CONFIG = {
+  organizationId: process.env.NEXT_PUBLIC_POLAR_ORGANIZATION_ID,
+  checkoutUrl: 'https://polar.sh',
+  customerPortalUrl: 'https://polar.sh/purchases',
+};
+
+export function createPolarCheckoutUrl(productId: string, customerEmail?: string): string {
+  const baseUrl = `${POLAR_CONFIG.checkoutUrl}/${POLAR_CONFIG.organizationId}/products/${productId}/checkout`;
+
+  if (customerEmail) {
+    return `${baseUrl}?customer_email=${encodeURIComponent(customerEmail)}`;
+  }
+
+  return baseUrl;
+}
+
+export function getPolarCustomerPortalUrl(): string {
+  return POLAR_CONFIG.customerPortalUrl;
+}
