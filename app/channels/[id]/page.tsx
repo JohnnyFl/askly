@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Loader2, MessageSquare, HelpCircle, Clock, Sparkles } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, MessageSquare, HelpCircle, Clock, Sparkles, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 type Channel = {
   id: string;
@@ -178,6 +179,19 @@ export default function ChannelChatPage() {
                 <h1 className="text-2xl font-bold text-slate-900 truncate">{channel.name}</h1>
                 <p className="text-sm text-slate-600 truncate">{channel.description}</p>
               </div>
+              <nav className="hidden md:flex gap-4">
+                <Link href="/pricing">
+                  <Button variant="ghost" className="rounded-xl font-medium hover:bg-pink-50 hover:text-[#EF4444]">
+                    Pricing
+                  </Button>
+                </Link>
+                <Link href="/account">
+                  <Button variant="ghost" className="gap-2 rounded-xl font-medium hover:bg-pink-50 hover:text-[#EF4444]">
+                    <User className="h-4 w-4" />
+                    Account
+                  </Button>
+                </Link>
+              </nav>
             </div>
           </header>
 

@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MessageSquare, LogOut, Loader2, Search, Sparkles } from 'lucide-react';
+import { MessageSquare, LogOut, Loader2, Search, Sparkles, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import Link from 'next/link';
 
 type Channel = {
   id: string;
@@ -83,6 +84,9 @@ export default function ChannelsPage() {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-[#FB7185] to-[#EF4444] bg-clip-text text-transparent">Askly</h1>
               </div>
               <div className="flex items-center gap-6">
+                <nav className="hidden md:flex gap-6 text-slate-700 font-medium">
+                  <Link href="/pricing" className="hover:text-[#EF4444] transition-colors">Pricing</Link>
+                </nav>
                 <div className="relative hidden md:block">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   <Input
@@ -93,6 +97,15 @@ export default function ChannelsPage() {
                     className="pl-10 w-64 rounded-xl border-2 border-pink-100 focus:border-[#FB7185]"
                   />
                 </div>
+                <Link href="/account">
+                  <Button
+                    variant="ghost"
+                    className="gap-2 rounded-xl font-medium hover:bg-pink-50 hover:text-[#EF4444]"
+                  >
+                    <User className="h-4 w-4" />
+                    Account
+                  </Button>
+                </Link>
                 <Button
                   variant="ghost"
                   onClick={handleSignOut}
