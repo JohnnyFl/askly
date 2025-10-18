@@ -93,8 +93,8 @@ export default function Home() {
                 </div>
               </Card>
 
-              <div className="space-y-6">
-                <Card className="bg-gradient-to-br from-[#EF4444] to-[#DC2626] rounded-3xl shadow-xl border border-white/20 p-8 text-white">
+              <div className="grid grid-rows-2 gap-6 h-full">
+                <Card className="bg-gradient-to-br from-[#EF4444] to-[#DC2626] rounded-3xl shadow-xl border border-white/20 p-8 text-white flex flex-col">
                   <div className="flex items-start justify-between mb-4">
                     <div className="h-14 w-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
                       <Lightbulb className="h-8 w-8" />
@@ -110,7 +110,7 @@ export default function Home() {
                   </p>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] rounded-3xl shadow-xl border border-white/20 p-8 text-white">
+                <Card className="bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] rounded-3xl shadow-xl border border-white/20 p-8 text-white flex flex-col">
                   <div className="flex items-start justify-between mb-4">
                     <div className="h-14 w-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
                       <Heart className="h-8 w-8" />
