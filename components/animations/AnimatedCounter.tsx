@@ -10,7 +10,7 @@ interface AnimatedCounterProps {
 }
 
 export function AnimatedCounter({ end, duration = 2000, suffix = '', className = '' }: AnimatedCounterProps) {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(end);
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -33,6 +33,8 @@ export function AnimatedCounter({ end, duration = 2000, suffix = '', className =
 
   useEffect(() => {
     if (!isVisible) return;
+
+    setCount(0);
 
     let startTime: number;
     let animationFrame: number;

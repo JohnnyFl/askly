@@ -17,11 +17,18 @@ export function TypingAnimation({
   delayBetween = 2000,
   className = ''
 }: TypingAnimationProps) {
-  const [displayedText, setDisplayedText] = useState('');
+  const [displayedText, setDisplayedText] = useState(texts[0]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     const currentText = texts[currentIndex];
 
     const timeout = setTimeout(() => {
@@ -42,7 +49,7 @@ export function TypingAnimation({
     }, isDeleting ? deletingSpeed : typingSpeed);
 
     return () => clearTimeout(timeout);
-  }, [displayedText, isDeleting, currentIndex, texts, typingSpeed, deletingSpeed, delayBetween]);
+  }, [mounted, displayedText, isDeleting, currentIndex, texts, typingSpeed, deletingSpeed, delayBetween]);
 
   return (
     <span className={className}>
