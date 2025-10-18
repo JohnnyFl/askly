@@ -1,7 +1,0 @@
-name: askly
-description: Askly Asistant
-runtime: go
-config:
-  pulumi:tags:
-    value:
-      pulumi:template: aws-go
