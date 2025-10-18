@@ -32,6 +32,7 @@ export default function Home() {
               <nav className="hidden md:flex gap-8 text-slate-700 font-medium">
                 <a href="#" className="hover:text-[#EF4444] transition-colors">Home</a>
                 <a href="#features" className="hover:text-[#EF4444] transition-colors">Features</a>
+                <Link href="/pricing" className="hover:text-[#EF4444] transition-colors">Pricing</Link>
                 <a href="#community" className="hover:text-[#EF4444] transition-colors">Community</a>
               </nav>
               <div className="flex gap-3">
