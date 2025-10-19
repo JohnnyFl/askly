@@ -56,24 +56,6 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
 	}
 
-	userRepo, err := repository.NewUserRepository(ctx)
-	if err != nil {
-		log.Printf("ERROR: Failed to initialize user repository: %v", err)
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
-	}
-
-	transcriptionRepo, err := repository.NewTranscriptionRepository(ctx)
-	if err != nil {
-		log.Printf("ERROR: Failed to initialize transcription repository: %v", err)
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
-	}
-
-	messageRepo, err := repository.NewMessageRepository(ctx)
-	if err != nil {
-		log.Printf("ERROR: Failed to initialize message repository: %v", err)
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
-	}
-
 	// Count channels
 	var channels []*models.Channel
 	totalChannels := 0
@@ -83,36 +65,36 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		totalChannels = len(channels)
 	}
 
-	// Count users
-	var users []*models.User
+	// Count users by scanning the users table
 	totalUsers := 0
-	if err := userRepo.ListUsers(ctx, &users); err != nil {
-		log.Printf("ERROR: Failed to count users: %v", err)
+	var users []map[string]interface{}
+	db, err := repository.NewDynamoDBRepository(ctx)
+	if err != nil {
+		log.Printf("ERROR: Failed to initialize DB: %v", err)
 	} else {
-		totalUsers = len(users)
+		if err := db.Scan(ctx, "askly-users", &users); err != nil {
+			log.Printf("ERROR: Failed to count users: %v", err)
+		} else {
+			totalUsers = len(users)
+		}
 	}
 
-	// Count transcriptions (this would need a ListTranscriptions method)
-	// For now, we'll iterate through channels and count
+	// Count transcriptions by scanning transcriptions table
 	totalTranscriptions := 0
-	for _, channel := range channels {
-		var transcriptions []*models.Transcription
-		if err := transcriptionRepo.ListTranscriptionsByChannel(ctx, channel.PK, &transcriptions); err != nil {
-			log.Printf("WARN: Failed to count transcriptions for channel %s: %v", channel.PK, err)
-		} else {
-			totalTranscriptions += len(transcriptions)
-		}
+	var transcriptions []map[string]interface{}
+	if err := db.Scan(ctx, "askly-transcriptions", &transcriptions); err != nil {
+		log.Printf("ERROR: Failed to count transcriptions: %v", err)
+	} else {
+		totalTranscriptions = len(transcriptions)
 	}
 
-	// Count messages (questions)
+	// Count messages (questions) by scanning messages table
 	totalQuestions := 0
-	for _, user := range users {
-		var messages []*models.Message
-		if err := messageRepo.ListMessagesByUser(ctx, user.PK, &messages); err != nil {
-			log.Printf("WARN: Failed to count messages for user %s: %v", user.PK, err)
-		} else {
-			totalQuestions += len(messages)
-		}
+	var messages []map[string]interface{}
+	if err := db.Scan(ctx, "askly-messages", &messages); err != nil {
+		log.Printf("ERROR: Failed to count messages: %v", err)
+	} else {
+		totalQuestions = len(messages)
 	}
 
 	log.Printf("INFO: Stats - Channels: %d, Users: %d, Questions: %d, Transcriptions: %d",

@@ -17,6 +17,9 @@ LAMBDAS=(
   "upload-transcription"
   "send-message"
   "get-messages"
+  "admin-stats"
+  "list-transcriptions"
+  "delete-transcription"
 )
 
 # Build each Lambda function

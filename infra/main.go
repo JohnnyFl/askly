@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/apigateway"
+	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/cognito"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/lambda"
@@ -250,6 +251,126 @@ func main() {
 			return err
 		}
 
+		// ===== Cognito User Pool =====
+		// Create User Pool for regular users
+		userPool, err := cognito.NewUserPool(ctx, "askly-user-pool", &cognito.UserPoolArgs{
+			Name: pulumi.String("askly-users"),
+			PasswordPolicy: &cognito.UserPoolPasswordPolicyArgs{
+				MinimumLength:    pulumi.Int(8),
+				RequireLowercase: pulumi.Bool(true),
+				RequireNumbers:   pulumi.Bool(true),
+				RequireSymbols:   pulumi.Bool(false),
+				RequireUppercase: pulumi.Bool(true),
+			},
+			AutoVerifiedAttributes: pulumi.StringArray{
+				pulumi.String("email"),
+			},
+			UsernameAttributes: pulumi.StringArray{
+				pulumi.String("email"),
+			},
+			Schemas: cognito.UserPoolSchemaArray{
+				&cognito.UserPoolSchemaArgs{
+					Name:                   pulumi.String("email"),
+					AttributeDataType:      pulumi.String("String"),
+					Required:               pulumi.Bool(true),
+					Mutable:                pulumi.Bool(true),
+					DeveloperOnlyAttribute: pulumi.Bool(false),
+				},
+			},
+			EmailConfiguration: &cognito.UserPoolEmailConfigurationArgs{
+				EmailSendingAccount: pulumi.String("COGNITO_DEFAULT"),
+			},
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-user-pool"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create User Pool Client for frontend
+		userPoolClient, err := cognito.NewUserPoolClient(ctx, "askly-user-pool-client", &cognito.UserPoolClientArgs{
+			Name:       pulumi.String("askly-web-client"),
+			UserPoolId: userPool.ID(),
+			ExplicitAuthFlows: pulumi.StringArray{
+				pulumi.String("ALLOW_USER_PASSWORD_AUTH"),
+				pulumi.String("ALLOW_REFRESH_TOKEN_AUTH"),
+				pulumi.String("ALLOW_USER_SRP_AUTH"),
+			},
+			GenerateSecret:                  pulumi.Bool(false),
+			PreventUserExistenceErrors:      pulumi.String("ENABLED"),
+			AllowedOauthFlowsUserPoolClient: pulumi.Bool(false),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create Admin User Pool (separate pool for admins)
+		adminUserPool, err := cognito.NewUserPool(ctx, "askly-admin-pool", &cognito.UserPoolArgs{
+			Name: pulumi.String("askly-admins"),
+			PasswordPolicy: &cognito.UserPoolPasswordPolicyArgs{
+				MinimumLength:    pulumi.Int(12),
+				RequireLowercase: pulumi.Bool(true),
+				RequireNumbers:   pulumi.Bool(true),
+				RequireSymbols:   pulumi.Bool(true),
+				RequireUppercase: pulumi.Bool(true),
+			},
+			AutoVerifiedAttributes: pulumi.StringArray{
+				pulumi.String("email"),
+			},
+			UsernameAttributes: pulumi.StringArray{
+				pulumi.String("email"),
+			},
+			Schemas: cognito.UserPoolSchemaArray{
+				&cognito.UserPoolSchemaArgs{
+					Name:                   pulumi.String("email"),
+					AttributeDataType:      pulumi.String("String"),
+					Required:               pulumi.Bool(true),
+					Mutable:                pulumi.Bool(true),
+					DeveloperOnlyAttribute: pulumi.Bool(false),
+				},
+				&cognito.UserPoolSchemaArgs{
+					Name:                   pulumi.String("role"),
+					AttributeDataType:      pulumi.String("String"),
+					Required:               pulumi.Bool(false),
+					Mutable:                pulumi.Bool(true),
+					DeveloperOnlyAttribute: pulumi.Bool(false),
+					StringAttributeConstraints: &cognito.UserPoolSchemaStringAttributeConstraintsArgs{
+						MinLength: pulumi.String("1"),
+						MaxLength: pulumi.String("50"),
+					},
+				},
+			},
+			EmailConfiguration: &cognito.UserPoolEmailConfigurationArgs{
+				EmailSendingAccount: pulumi.String("COGNITO_DEFAULT"),
+			},
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-admin-pool"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create Admin Pool Client
+		adminPoolClient, err := cognito.NewUserPoolClient(ctx, "askly-admin-pool-client", &cognito.UserPoolClientArgs{
+			Name:       pulumi.String("askly-admin-client"),
+			UserPoolId: adminUserPool.ID(),
+			ExplicitAuthFlows: pulumi.StringArray{
+				pulumi.String("ALLOW_USER_PASSWORD_AUTH"),
+				pulumi.String("ALLOW_REFRESH_TOKEN_AUTH"),
+				pulumi.String("ALLOW_USER_SRP_AUTH"),
+			},
+			GenerateSecret:                  pulumi.Bool(false),
+			PreventUserExistenceErrors:      pulumi.String("ENABLED"),
+			AllowedOauthFlowsUserPoolClient: pulumi.Bool(false),
+		})
+		if err != nil {
+			return err
+		}
+
 		// ===== IAM Role for Lambda Functions =====
 		lambdaRole, err := iam.NewRole(ctx, "askly-lambda-role", &iam.RoleArgs{
 			Name: pulumi.String("askly-lambda-execution-role"),
@@ -281,8 +402,8 @@ func main() {
 			return err
 		}
 
-		// Create inline policy for DynamoDB and Bedrock access
-		_, err = iam.NewRolePolicy(ctx, "lambda-dynamodb-bedrock-policy", &iam.RolePolicyArgs{
+		// Create inline policy for DynamoDB, Bedrock, and Cognito access
+		_, err = iam.NewRolePolicy(ctx, "lambda-dynamodb-bedrock-cognito-policy", &iam.RolePolicyArgs{
 			Role: lambdaRole.ID(),
 			Policy: pulumi.String(`{
 				"Version": "2012-10-17",
@@ -302,14 +423,25 @@ func main() {
 						]
 					},
 					{
-            "Effect": "Allow",
-            "Action": [
-                "bedrock:InvokeModel",
-                "bedrock:ListFoundationModels",
-                "bedrock:GetFoundationModel"
-            ],
-            "Resource": "*"
-        }
+						"Effect": "Allow",
+						"Action": [
+							"bedrock:InvokeModel",
+							"bedrock:ListFoundationModels",
+							"bedrock:GetFoundationModel"
+						],
+						"Resource": "*"
+					},
+					{
+						"Effect": "Allow",
+						"Action": [
+							"cognito-idp:AdminInitiateAuth",
+							"cognito-idp:AdminCreateUser",
+							"cognito-idp:AdminSetUserPassword",
+							"cognito-idp:AdminGetUser",
+							"cognito-idp:AdminUpdateUserAttributes"
+						],
+						"Resource": "arn:aws:cognito-idp:*:*:userpool/*"
+					}
 				]
 			}`),
 		})
@@ -318,11 +450,7 @@ func main() {
 		}
 
 		// ===== Lambda Functions =====
-		// JWT Secret for Lambda environment
-		jwtSecret := pulumi.String("your-super-secret-jwt-key-change-in-production")
-
 		// Lambda environment variables
-		// Note: AWS_REGION is automatically set by Lambda, don't include it here
 		lambdaEnv := &lambda.FunctionEnvironmentArgs{
 			Variables: pulumi.StringMap{
 				"DYNAMODB_USERS_TABLE":          usersTable.Name,
@@ -333,7 +461,10 @@ func main() {
 				"DYNAMODB_MESSAGES_TABLE":       messagesTable.Name,
 				"BEDROCK_EMBEDDING_MODEL":       pulumi.String("amazon.titan-embed-text-v2:0"),
 				"BEDROCK_CHAT_MODEL":            pulumi.String("anthropic.claude-3-haiku-20240307-v1:0"),
-				"JWT_SECRET":                    jwtSecret,
+				"COGNITO_USER_POOL_ID":          userPool.ID(),
+				"COGNITO_CLIENT_ID":             userPoolClient.ID(),
+				"COGNITO_ADMIN_POOL_ID":         adminUserPool.ID(),
+				"COGNITO_ADMIN_CLIENT_ID":       adminPoolClient.ID(),
 			},
 		}
 
@@ -489,6 +620,62 @@ func main() {
 			return err
 		}
 
+		// Lambda: admin-stats
+		adminStatsLambda, err := lambda.NewFunction(ctx, "admin-stats", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-admin-stats"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/admin-stats"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-admin-stats"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: list-transcriptions
+		listTranscriptionsLambda, err := lambda.NewFunction(ctx, "list-transcriptions", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-list-transcriptions"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/list-transcriptions"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-list-transcriptions"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: delete-transcription
+		deleteTranscriptionLambda, err := lambda.NewFunction(ctx, "delete-transcription", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-delete-transcription"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/delete-transcription"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-delete-transcription"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
 		// ===== API Gateway =====
 		// Create REST API
 		api, err := apigateway.NewRestApi(ctx, "askly-api", &apigateway.RestApiArgs{
@@ -498,6 +685,28 @@ func main() {
 				"Name":        pulumi.String("askly-api"),
 				"Environment": pulumi.String("poc"),
 			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create Cognito Authorizer for User Pool
+		userAuthorizer, err := apigateway.NewAuthorizer(ctx, "user-cognito-authorizer", &apigateway.AuthorizerArgs{
+			Name:         pulumi.String("askly-user-authorizer"),
+			RestApi:      api.ID(),
+			Type:         pulumi.String("COGNITO_USER_POOLS"),
+			ProviderArns: pulumi.StringArray{userPool.Arn},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create Cognito Authorizer for Admin Pool
+		adminAuthorizer, err := apigateway.NewAuthorizer(ctx, "admin-cognito-authorizer", &apigateway.AuthorizerArgs{
+			Name:         pulumi.String("askly-admin-authorizer"),
+			RestApi:      api.ID(),
+			Type:         pulumi.String("COGNITO_USER_POOLS"),
+			ProviderArns: pulumi.StringArray{adminUserPool.Arn},
 		})
 		if err != nil {
 			return err
@@ -604,12 +813,13 @@ func main() {
 			return err
 		}
 
-		// GET /channels
+		// GET /channels (requires user authentication)
 		_, err = apigateway.NewMethod(ctx, "channels-list-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    channelsResource.ID(),
 			HttpMethod:    pulumi.String("GET"),
-			Authorization: pulumi.String("NONE"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
 		})
 		if err != nil {
 			return err
@@ -647,12 +857,13 @@ func main() {
 			return err
 		}
 
-		// GET /channels/{id}
+		// GET /channels/{id} (requires user authentication)
 		_, err = apigateway.NewMethod(ctx, "channel-get-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    channelIDResource.ID(),
 			HttpMethod:    pulumi.String("GET"),
-			Authorization: pulumi.String("NONE"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
 		})
 		if err != nil {
 			return err
@@ -694,7 +905,8 @@ func main() {
 			RestApi:       api.ID(),
 			ResourceId:    askResource.ID(),
 			HttpMethod:    pulumi.String("POST"),
-			Authorization: pulumi.String("NONE"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
 		})
 		if err != nil {
 			return err
@@ -736,7 +948,8 @@ func main() {
 			RestApi:       api.ID(),
 			ResourceId:    messagesResource.ID(),
 			HttpMethod:    pulumi.String("GET"),
-			Authorization: pulumi.String("NONE"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
 		})
 		if err != nil {
 			return err
@@ -792,12 +1005,13 @@ func main() {
 			return err
 		}
 
-		// POST /admin/channels/{id}/transcriptions
+		// POST /admin/channels/{id}/transcriptions (requires admin authentication)
 		_, err = apigateway.NewMethod(ctx, "admin-upload-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    adminTranscriptionsResource.ID(),
 			HttpMethod:    pulumi.String("POST"),
-			Authorization: pulumi.String("NONE"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
 		})
 		if err != nil {
 			return err
@@ -825,6 +1039,194 @@ func main() {
 			return err
 		}
 
+		// GET /admin/stats
+		statsResource, err := apigateway.NewResource(ctx, "admin-stats-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: adminResource.ID(),
+			PathPart: pulumi.String("stats"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "admin-stats-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    statsResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "admin-stats-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            statsResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   adminStatsLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "admin-stats-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  adminStatsLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /admin/channels
+		_, err = apigateway.NewMethod(ctx, "admin-channels-list-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminChannelsResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "admin-channels-list-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminChannelsResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   listChannelsLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "admin-channels-list-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  listChannelsLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /admin/channels/{id}
+		_, err = apigateway.NewMethod(ctx, "admin-channel-get-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminChannelIDResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "admin-channel-get-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminChannelIDResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   getChannelLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "admin-channel-get-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  getChannelLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /admin/channels/{id}/transcriptions
+		_, err = apigateway.NewMethod(ctx, "admin-list-transcriptions-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminTranscriptionsResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "admin-list-transcriptions-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminTranscriptionsResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   listTranscriptionsLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "admin-list-transcriptions-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  listTranscriptionsLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// DELETE /admin/channels/{id}/transcriptions/{transcriptionId}
+		adminTranscriptionIDResource, err := apigateway.NewResource(ctx, "admin-transcription-id-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: adminTranscriptionsResource.ID(),
+			PathPart: pulumi.String("{transcriptionId}"),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "admin-delete-transcription-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminTranscriptionIDResource.ID(),
+			HttpMethod:    pulumi.String("DELETE"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewIntegration(ctx, "admin-delete-transcription-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminTranscriptionIDResource.ID(),
+			HttpMethod:            pulumi.String("DELETE"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   deleteTranscriptionLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+
+		_, err = lambda.NewPermission(ctx, "admin-delete-transcription-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  deleteTranscriptionLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
 		// Deploy API Gateway
 		deployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
 			RestApi: api.ID(),
@@ -841,6 +1243,9 @@ func main() {
 			uploadTranscriptionLambda,
 			sendMessageLambda,
 			getMessagesLambda,
+			adminStatsLambda,
+			listTranscriptionsLambda,
+			deleteTranscriptionLambda,
 		}))
 		if err != nil {
 			return err
@@ -870,6 +1275,14 @@ func main() {
 		ctx.Export("lambdaRoleArn", lambdaRole.Arn)
 		ctx.Export("apiGatewayURL", pulumi.Sprintf("https://%s.execute-api.us-east-1.amazonaws.com/%s", api.ID(), stage.StageName))
 		ctx.Export("apiGatewayID", api.ID())
+
+		// Cognito exports
+		ctx.Export("cognitoUserPoolId", userPool.ID())
+		ctx.Export("cognitoUserPoolArn", userPool.Arn)
+		ctx.Export("cognitoClientId", userPoolClient.ID())
+		ctx.Export("cognitoAdminPoolId", adminUserPool.ID())
+		ctx.Export("cognitoAdminPoolArn", adminUserPool.Arn)
+		ctx.Export("cognitoAdminClientId", adminPoolClient.ID())
 
 		return nil
 	})
