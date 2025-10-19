@@ -59,7 +59,7 @@ export default function ChannelChatPage() {
   const fetchChannelData = async () => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -84,7 +84,7 @@ export default function ChannelChatPage() {
   const fetchFAQs = async () => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}/faqs`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -102,16 +102,16 @@ export default function ChannelChatPage() {
   const fetchRecentQuestions = async () => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}/questions`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/messages`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      if (!response.ok) throw new Error('Failed to fetch questions');
+      if (!response.ok) throw new Error('Failed to fetch messages');
 
       const data = await response.json();
-      setRecentQuestions(data.questions || []);
+      setRecentQuestions(data.messages || []);
     } catch (error) {
       console.error('Error fetching recent questions:', error);
     }
@@ -125,7 +125,7 @@ export default function ChannelChatPage() {
 
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels/${channelId}/questions`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels/${channelId}/ask`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

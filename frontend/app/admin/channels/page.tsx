@@ -44,7 +44,7 @@ export default function AdminChannelsPage() {
   const fetchChannels = async () => {
     try {
       const token = localStorage.getItem('admin_auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/channels`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

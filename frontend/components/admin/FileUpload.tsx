@@ -113,7 +113,7 @@ export function FileUpload({ channelId, onUploadComplete }: FileUploadProps) {
 
       // Send as JSON to match backend expectations
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}/transcriptions`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions`,
         {
           method: 'POST',
           headers: {

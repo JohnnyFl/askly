@@ -51,7 +51,7 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('admin_auth_token');
 
       // Fetch stats
-      const statsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/stats`, {
+      const statsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch recent activity
-      const activityResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/activity`, {
+      const activityResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/activity`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

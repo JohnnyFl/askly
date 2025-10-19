@@ -43,7 +43,7 @@ export default function AdminChannelUploadPage() {
   const fetchChannel = async () => {
     try {
       const token = localStorage.getItem('admin_auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -73,7 +73,7 @@ export default function AdminChannelUploadPage() {
     try {
       const token = localStorage.getItem('admin_auth_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}/transcriptions`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -111,7 +111,7 @@ export default function AdminChannelUploadPage() {
     try {
       const token = localStorage.getItem('admin_auth_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}/transcriptions/${transcriptionId}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions/${transcriptionId}`,
         {
           method: 'DELETE',
           headers: {
@@ -144,7 +144,7 @@ export default function AdminChannelUploadPage() {
     try {
       const token = localStorage.getItem('admin_auth_token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}/transcriptions/${transcriptionId}/download`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions/${transcriptionId}/download`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,

@@ -38,7 +38,7 @@ export default function ChannelsPage() {
   const fetchChannels = async () => {
     try {
       const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/channels`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/channels`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
