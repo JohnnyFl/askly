@@ -24,7 +24,9 @@ type ChannelResponse struct {
 	YoutubeChannelID string `json:"youtube_channel_id"`
 	Description      string `json:"description"`
 	ThumbnailURL     string `json:"thumbnail_url"`
+	AvatarURL        string `json:"avatar_url"`
 	YoutubeURL       string `json:"youtube_url"`
+	CreatedAt        string `json:"created_at"`
 }
 
 type ErrorResponse struct {
@@ -48,8 +50,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusUnauthorized, ErrorResponse{Error: "Invalid or expired token"})
 	}
 
-	// Only users can list channels (admins use admin panel)
-	if !claims.IsUser() {
+	// Allow both users and admins to list channels
+	if !claims.IsUser() && !claims.IsAdmin() {
 		return response(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
 	}
 
@@ -74,7 +76,9 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			YoutubeChannelID: channel.YoutubeChannelID,
 			Description:      channel.Description,
 			ThumbnailURL:     channel.ThumbnailURL,
+			AvatarURL:        channel.ThumbnailURL,
 			YoutubeURL:       channel.YoutubeURL,
+			CreatedAt:        channel.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
 	}
 

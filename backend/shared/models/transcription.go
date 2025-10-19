@@ -13,6 +13,7 @@ type Transcription struct {
 	FullText   string    `dynamodbav:"full_text" json:"full_text"`
 	UploadedBy string    `dynamodbav:"uploaded_by" json:"uploaded_by"`
 	UploadedAt time.Time `dynamodbav:"uploaded_at" json:"uploaded_at"`
+	Status     string    `dynamodbav:"status" json:"status"` // "completed", "processing", "failed"
 }
 
 // TranscriptionChunk represents a chunk of a transcription with embedding
@@ -39,6 +40,7 @@ func NewTranscription(channelID, videoTitle, videoURL, videoID, fullText, upload
 		FullText:   fullText,
 		UploadedBy: uploadedBy,
 		UploadedAt: time.Now(),
+		Status:     "completed", // Default to completed
 	}
 }
 

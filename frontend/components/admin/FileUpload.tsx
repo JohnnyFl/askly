@@ -92,57 +92,64 @@ export function FileUpload({ channelId, onUploadComplete }: FileUploadProps) {
   };
 
   const uploadFile = async (fileWithProgress: FileWithProgress, index: number) => {
-    const formData = new FormData();
-    formData.append('file', fileWithProgress.file);
-
     try {
       const token = localStorage.getItem('admin_auth_token');
 
       // Update status to uploading
       setFiles((prev) =>
-        prev.map((f, i) => (i === index ? { ...f, status: 'uploading', progress: 0 } : f))
+        prev.map((f, i) => (i === index ? { ...f, status: 'uploading', progress: 10 } : f))
       );
 
-      const xhr = new XMLHttpRequest();
+      // Read file content as text
+      const fileContent = await fileWithProgress.file.text();
 
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setFiles((prev) =>
-            prev.map((f, i) => (i === index ? { ...f, progress } : f))
-          );
+      // Extract video title from filename (remove extension)
+      const videoTitle = fileWithProgress.file.name.replace(/\.[^/.]+$/, '');
+
+      // Update progress to 30% after reading file
+      setFiles((prev) =>
+        prev.map((f, i) => (i === index ? { ...f, progress: 30 } : f))
+      );
+
+      // Send as JSON to match backend expectations
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}/transcriptions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            video_title: videoTitle,
+            video_id: '', // Optional
+            video_url: '', // Optional
+            transcription: fileContent,
+          }),
         }
-      });
+      );
 
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200 || xhr.status === 201) {
-          setFiles((prev) =>
-            prev.map((f, i) => (i === index ? { ...f, status: 'success', progress: 100 } : f))
-          );
-          if (onUploadComplete) {
-            onUploadComplete();
-          }
-        } else {
-          const errorMessage = JSON.parse(xhr.responseText)?.error || 'Upload failed';
-          setFiles((prev) =>
-            prev.map((f, i) =>
-              i === index ? { ...f, status: 'error', error: errorMessage } : f
-            )
-          );
+      // Update progress to 90% after sending
+      setFiles((prev) =>
+        prev.map((f, i) => (i === index ? { ...f, progress: 90 } : f))
+      );
+
+      if (response.ok) {
+        setFiles((prev) =>
+          prev.map((f, i) => (i === index ? { ...f, status: 'success', progress: 100 } : f))
+        );
+        if (onUploadComplete) {
+          onUploadComplete();
         }
-      });
-
-      xhr.addEventListener('error', () => {
+      } else {
+        const errorData = await response.json();
+        const errorMessage = errorData.error || 'Upload failed';
         setFiles((prev) =>
           prev.map((f, i) =>
-            i === index ? { ...f, status: 'error', error: 'Network error' } : f
+            i === index ? { ...f, status: 'error', error: errorMessage } : f
           )
         );
-      });
-
-      xhr.open('POST', `${process.env.NEXT_PUBLIC_API_URL}/api/admin/channels/${channelId}/transcriptions`);
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.send(formData);
+      }
     } catch (error: any) {
       setFiles((prev) =>
         prev.map((f, i) =>
