@@ -4,14 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Channel represents a YouTube channel
@@ -26,13 +28,13 @@ type Channel struct {
 	CreatedAt        string `dynamodbav:"created_at"`
 }
 
-// Admin represents an admin user
+// Admin represents an admin user (DynamoDB record)
 type Admin struct {
-	PK           string `dynamodbav:"PK"`
-	SK           string `dynamodbav:"SK"`
-	Email        string `dynamodbav:"email"`
-	PasswordHash string `dynamodbav:"password_hash"`
-	CreatedAt    string `dynamodbav:"created_at"`
+	PK        string `dynamodbav:"PK"`
+	SK        string `dynamodbav:"SK"`
+	Email     string `dynamodbav:"email"`
+	CognitoID string `dynamodbav:"cognito_id"` // Store Cognito user ID instead of password
+	CreatedAt string `dynamodbav:"created_at"`
 }
 
 func main() {
@@ -44,19 +46,32 @@ func main() {
 	}
 
 	// Create DynamoDB client
-	client := dynamodb.NewFromConfig(cfg)
+	dynamoClient := dynamodb.NewFromConfig(cfg)
+
+	// Create Cognito client
+	cognitoClient := cognitoidentityprovider.NewFromConfig(cfg)
+
+	// Get Cognito Admin Pool ID from environment
+	adminPoolID := os.Getenv("COGNITO_ADMIN_POOL_ID")
+	if adminPoolID == "" {
+		log.Fatal("COGNITO_ADMIN_POOL_ID environment variable not set")
+	}
 
 	// Seed channels
-	if err := seedChannels(ctx, client); err != nil {
+	if err := seedChannels(ctx, dynamoClient); err != nil {
 		log.Fatalf("failed to seed channels: %v", err)
 	}
 
-	// Seed admin user
-	if err := seedAdmin(ctx, client); err != nil {
+	// Seed admin user in Cognito and DynamoDB
+	if err := seedAdmin(ctx, dynamoClient, cognitoClient, adminPoolID); err != nil {
 		log.Fatalf("failed to seed admin: %v", err)
 	}
 
-	fmt.Println("✅ Seed data created successfully!")
+	fmt.Println("\n✅ Seed data created successfully!")
+	fmt.Println("📝 Admin credentials:")
+	fmt.Println("   Email: admin@askly.com")
+	fmt.Println("   Password: AdminPass123!")
+	fmt.Println("   ⚠️  CHANGE THIS PASSWORD AFTER FIRST LOGIN!")
 }
 
 func seedChannels(ctx context.Context, client *dynamodb.Client) error {
@@ -103,21 +118,73 @@ func seedChannels(ctx context.Context, client *dynamodb.Client) error {
 	return nil
 }
 
-func seedAdmin(ctx context.Context, client *dynamodb.Client) error {
-	// Hash password
-	password := "admin123" // Default password - should be changed after first login
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
+func seedAdmin(ctx context.Context, dynamoClient *dynamodb.Client, cognitoClient *cognitoidentityprovider.Client, adminPoolID string) error {
+	email := "admin@askly.com"
+	password := "AdminPass123!" // Meets Cognito admin requirements: min 12 chars, uppercase, lowercase, number, symbol
+
+	fmt.Println("\n🔐 Creating admin user in Cognito...")
+
+	// Create admin user in Cognito
+	createUserInput := &cognitoidentityprovider.AdminCreateUserInput{
+		UserPoolId:        aws.String(adminPoolID),
+		Username:          aws.String(email),
+		TemporaryPassword: aws.String(password),
+		UserAttributes: []types.AttributeType{
+			{
+				Name:  aws.String("email"),
+				Value: aws.String(email),
+			},
+			{
+				Name:  aws.String("email_verified"),
+				Value: aws.String("true"),
+			},
+		},
+		MessageAction: types.MessageActionTypeSuppress, // Don't send welcome email
 	}
 
+	createUserOutput, err := cognitoClient.AdminCreateUser(ctx, createUserInput)
+	if err != nil {
+		return fmt.Errorf("failed to create admin in Cognito: %w", err)
+	}
+
+	// Extract Cognito user ID (sub)
+	var cognitoUserID string
+	for _, attr := range createUserOutput.User.Attributes {
+		if aws.ToString(attr.Name) == "sub" {
+			cognitoUserID = aws.ToString(attr.Value)
+			break
+		}
+	}
+
+	if cognitoUserID == "" {
+		return fmt.Errorf("failed to get Cognito user ID")
+	}
+
+	fmt.Printf("✅ Created admin in Cognito (ID: %s)\n", cognitoUserID)
+
+	// Set permanent password
+	setPwdInput := &cognitoidentityprovider.AdminSetUserPasswordInput{
+		UserPoolId: aws.String(adminPoolID),
+		Username:   aws.String(email),
+		Password:   aws.String(password),
+		Permanent:  true,
+	}
+
+	_, err = cognitoClient.AdminSetUserPassword(ctx, setPwdInput)
+	if err != nil {
+		return fmt.Errorf("failed to set permanent password: %w", err)
+	}
+
+	fmt.Println("✅ Set permanent password")
+
+	// Create admin record in DynamoDB
 	adminID := uuid.New().String()
 	admin := Admin{
-		PK:           fmt.Sprintf("ADMIN#%s", adminID),
-		SK:           "PROFILE",
-		Email:        "admin@askly.com",
-		PasswordHash: string(hashedPassword),
-		CreatedAt:    time.Now().Format(time.RFC3339),
+		PK:        fmt.Sprintf("ADMIN#%s", adminID),
+		SK:        "PROFILE",
+		Email:     email,
+		CognitoID: cognitoUserID,
+		CreatedAt: time.Now().Format(time.RFC3339),
 	}
 
 	item, err := attributevalue.MarshalMap(admin)
@@ -125,17 +192,15 @@ func seedAdmin(ctx context.Context, client *dynamodb.Client) error {
 		return fmt.Errorf("failed to marshal admin: %w", err)
 	}
 
-	_, err = client.PutItem(ctx, &dynamodb.PutItemInput{
+	_, err = dynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String("askly-admins"),
 		Item:      item,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to put admin: %w", err)
+		return fmt.Errorf("failed to put admin in DynamoDB: %w", err)
 	}
 
-	fmt.Printf("✅ Created admin user: %s\n", admin.Email)
-	fmt.Printf("   Password: %s (change this after first login!)\n", password)
-	fmt.Printf("   Admin ID: %s\n", admin.PK)
+	fmt.Printf("✅ Created admin record in DynamoDB (Admin ID: %s)\n", admin.PK)
 
 	return nil
 }

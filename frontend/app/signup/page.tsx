@@ -42,7 +42,11 @@ export default function SignUpPage() {
       }
 
       const data = await response.json();
-      localStorage.setItem('auth_token', data.token);
+      // Store Cognito ID token (used for API Gateway authorization)
+      localStorage.setItem('auth_token', data.id_token);
+      // Optionally store other tokens
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
       router.push('/channels');
     } catch (err: any) {
       setError(err.message || 'An error occurred during sign up');

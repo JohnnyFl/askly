@@ -37,7 +37,11 @@ export default function AdminLoginPage() {
       }
 
       const data = await response.json();
-      localStorage.setItem('admin_auth_token', data.token);
+      // Store Cognito ID token (used for API Gateway authorization)
+      localStorage.setItem('admin_auth_token', data.id_token);
+      // Optionally store other tokens
+      localStorage.setItem('admin_access_token', data.access_token);
+      localStorage.setItem('admin_refresh_token', data.refresh_token);
       router.push('/admin');
     } catch (err: any) {
       setError(err.message || 'An error occurred during login');

@@ -20,9 +20,12 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	Message string `json:"message"`
-	UserID  string `json:"user_id"`
-	Token   string `json:"token"`
+	Message      string `json:"message"`
+	UserID       string `json:"user_id"`
+	AccessToken  string `json:"access_token"`
+	IdToken      string `json:"id_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int32  `json:"expires_in"`
 }
 
 type ErrorResponse struct {
@@ -46,9 +49,34 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusBadRequest, ErrorResponse{Error: "Invalid email format"})
 	}
 
-	// Password validation
-	if len(req.Password) < 6 {
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Password must be at least 6 characters"})
+	// Password validation (Cognito requires min 8 chars with uppercase, lowercase, number)
+	if len(req.Password) < 8 {
+		return response(http.StatusBadRequest, ErrorResponse{Error: "Password must be at least 8 characters"})
+	}
+
+	// Initialize Cognito client
+	cognitoClient, err := auth.NewCognitoClient(ctx)
+	if err != nil {
+		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+	}
+
+	// Register user in Cognito
+	cognitoUserID, err := cognitoClient.SignUpUser(ctx, req.Email, req.Password)
+	if err != nil {
+		// Check for specific Cognito errors
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "UsernameExistsException") {
+			return response(http.StatusConflict, ErrorResponse{Error: "User with this email already exists"})
+		}
+		if strings.Contains(errMsg, "InvalidPasswordException") {
+			return response(http.StatusBadRequest, ErrorResponse{Error: "Password does not meet requirements (min 8 chars, uppercase, lowercase, number)"})
+		}
+		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to register user"})
+	}
+
+	// Auto-confirm user (for POC - remove in production)
+	if err := cognitoClient.ConfirmSignUp(ctx, req.Email); err != nil {
+		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to confirm user"})
 	}
 
 	// Initialize repository
@@ -57,38 +85,26 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
 	}
 
-	// Check if user already exists
-	var existingUser models.User
-	err = userRepo.GetUserByEmail(ctx, req.Email, &existingUser)
-	if err == nil {
-		// User exists
-		return response(http.StatusConflict, ErrorResponse{Error: "User with this email already exists"})
-	}
-
-	// Hash password
-	hashedPassword, err := auth.HashPassword(req.Password)
-	if err != nil {
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to process password"})
-	}
-
-	// Create user
-	user := models.NewUser(req.Email, hashedPassword)
+	// Create user record in DynamoDB with Cognito user ID
+	user := models.NewUser(req.Email, cognitoUserID) // Store Cognito ID instead of password hash
 	if err := userRepo.CreateUser(ctx, user); err != nil {
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user"})
+		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to create user record"})
 	}
 
-	// Generate JWT token
-	userID := strings.TrimPrefix(user.PK, "USER#")
-	token, err := auth.GenerateToken(userID, user.Email, "user")
+	// Authenticate user to get tokens
+	authResult, err := cognitoClient.AuthenticateUser(ctx, req.Email, req.Password)
 	if err != nil {
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to generate token"})
+		return response(http.StatusInternalServerError, ErrorResponse{Error: "User registered but failed to authenticate"})
 	}
 
-	// Return success response
+	// Return success response with Cognito tokens
 	return response(http.StatusCreated, RegisterResponse{
-		Message: "User registered successfully",
-		UserID:  userID,
-		Token:   token,
+		Message:      "User registered successfully",
+		UserID:       cognitoUserID,
+		AccessToken:  authResult.AccessToken,
+		IdToken:      authResult.IdToken,
+		RefreshToken: authResult.RefreshToken,
+		ExpiresIn:    authResult.ExpiresIn,
 	})
 }
 
