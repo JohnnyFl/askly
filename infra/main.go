@@ -360,6 +360,7 @@ func main() {
 			UserPoolId: adminUserPool.ID(),
 			ExplicitAuthFlows: pulumi.StringArray{
 				pulumi.String("ALLOW_USER_PASSWORD_AUTH"),
+				pulumi.String("ALLOW_ADMIN_USER_PASSWORD_AUTH"),
 				pulumi.String("ALLOW_REFRESH_TOKEN_AUTH"),
 				pulumi.String("ALLOW_USER_SRP_AUTH"),
 			},

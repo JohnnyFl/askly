@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
+	"time"
 
-	"askly/backend/shared/auth"
+	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
 
@@ -35,62 +35,69 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	// Verify JWT token
-	authHeader := request.Headers["Authorization"]
-	if authHeader == "" {
-		authHeader = request.Headers["authorization"]
+	// Initialize logger with request context
+	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
+	log := logger.FromContext(ctx)
+
+	start := time.Now()
+	log.Info().Msg("Get messages request received")
+
+	// Extract user info from Cognito authorizer claims (already validated by API Gateway)
+	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
+	if !ok || claims == nil {
+		log.Error().Msg("No Cognito claims found in request context")
+		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
 	}
 
-	token, err := auth.ExtractTokenFromHeader(authHeader)
-	if err != nil {
-		log.Printf("ERROR: Failed to extract token: %v", err)
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Missing or invalid authorization header"})
-	}
+	userID, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
 
-	claims, err := auth.ValidateToken(token)
-	if err != nil {
-		log.Printf("ERROR: Token validation failed: %v", err)
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Invalid or expired token"})
-	}
+	// Add user ID to logger context
+	ctx = logger.WithUserID(ctx, userID)
+	log = logger.FromContext(ctx)
 
-	// Only users can get messages
-	if !claims.IsUser() {
-		return response(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
-	}
+	log.Debug().Str("email", email).Msg("User requesting messages")
 
 	// Get channel ID from path parameters
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
-		log.Printf("ERROR: Channel ID missing from path parameters")
+		log.Error().Msg("Channel ID missing from path parameters")
 		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
 	}
 
-	log.Printf("INFO: Fetching messages for channel: %s, user: %s", channelID, claims.UserID)
+	// Add channel ID to logger context
+	ctx = logger.WithChannelID(ctx, channelID)
+	log = logger.FromContext(ctx)
+
+	log.Debug().Msg("Fetching messages for user and channel")
 
 	// Add CHANNEL# prefix for DynamoDB query
-	channelID = "CHANNEL#" + channelID
+	channelPK := "CHANNEL#" + channelID
 
 	// Initialize repository
+	log.Debug().Msg("Initializing message repository")
 	messageRepo, err := repository.NewMessageRepository(ctx)
 	if err != nil {
-		log.Printf("ERROR: Failed to initialize message repository: %v", err)
+		log.Error().Err(err).Msg("Failed to initialize message repository")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
 	}
 
 	// Get messages for this user and channel
+	log.Debug().Str("channel_pk", channelPK).Msg("Fetching messages from database")
 	var messages []*models.ChatMessage
-	if err := messageRepo.ListMessagesByChannel(ctx, channelID, &messages); err != nil {
-		log.Printf("ERROR: Failed to fetch messages from DynamoDB for channel %s: %v", channelID, err)
+	if err := messageRepo.ListMessagesByChannel(ctx, channelPK, &messages); err != nil {
+		log.Error().Err(err).Str("channel_pk", channelPK).Msg("Failed to fetch messages from DynamoDB")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to fetch messages: %v", err)})
 	}
 
-	log.Printf("INFO: Found %d total messages for channel %s", len(messages), channelID)
+	log.Debug().Int("total_messages", len(messages)).Msg("Messages fetched from database")
 
 	// Filter messages by user (since we query by channel, need to filter)
+	log.Debug().Msg("Filtering messages for current user")
 	var userMessages []MessageResponse
-	userIDWithPrefix := "USER#" + claims.UserID
+	userIDWithPrefix := "USER#" + userID
 	for _, msg := range messages {
-		if msg.UserID == userIDWithPrefix || msg.UserID == claims.UserID {
+		if msg.UserID == userIDWithPrefix || msg.UserID == userID {
 			userMessages = append(userMessages, MessageResponse{
 				ID:        strings.TrimPrefix(msg.PK, "MESSAGE#"),
 				UserID:    msg.UserID,
@@ -103,7 +110,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		}
 	}
 
-	log.Printf("INFO: Returning %d messages for user %s", len(userMessages), claims.UserID)
+	duration := time.Since(start)
+	log.Info().
+		Int("message_count", len(userMessages)).
+		Int("total_messages", len(messages)).
+		Dur("duration_ms", duration).
+		Msg("Get messages request completed")
 
 	return response(http.StatusOK, GetMessagesResponse{
 		Messages: userMessages,

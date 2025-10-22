@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
+	"time"
 
-	"askly/backend/shared/auth"
+	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
 
@@ -23,71 +23,112 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	// Verify JWT token - only admins can delete transcriptions
-	authHeader := request.Headers["Authorization"]
-	if authHeader == "" {
-		authHeader = request.Headers["authorization"]
+	// Initialize logger with request context
+	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
+	log := logger.FromContext(ctx)
+
+	start := time.Now()
+	log.Info().Msg("Delete transcription request received")
+
+	// Extract admin info from Cognito authorizer claims (already validated by API Gateway)
+	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
+	if !ok || claims == nil {
+		log.Error().Msg("No Cognito claims found in request context")
+		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
 	}
 
-	token, err := auth.ExtractTokenFromHeader(authHeader)
-	if err != nil {
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Missing or invalid authorization header"})
-	}
+	adminID, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
 
-	claims, err := auth.ValidateToken(token)
-	if err != nil {
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Invalid or expired token"})
-	}
+	// Add admin ID to logger context
+	ctx = logger.WithAdminID(ctx, adminID)
+	log = logger.FromContext(ctx)
 
-	// Only admins can delete transcriptions
-	if !claims.IsAdmin() {
-		return response(http.StatusForbidden, ErrorResponse{Error: "Admin access required"})
-	}
+	log.Debug().Str("email", email).Msg("Admin deleting transcription")
 
 	// Get channel ID and transcription ID from path parameters
 	channelID := request.PathParameters["id"]
 	transcriptionID := request.PathParameters["transcriptionId"]
 
 	if channelID == "" || transcriptionID == "" {
+		log.Error().
+			Str("channel_id", channelID).
+			Str("transcription_id", transcriptionID).
+			Msg("Missing required path parameters")
 		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID and Transcription ID are required"})
 	}
 
+	// Add IDs to logger context
+	ctx = logger.WithChannelID(ctx, channelID)
+	ctx = logger.WithTranscriptionID(ctx, transcriptionID)
+	log = logger.FromContext(ctx)
+
 	transcriptionPK := "TRANSCRIPTION#" + transcriptionID
-	log.Printf("INFO: Admin %s deleting transcription %s from channel %s", claims.UserID, transcriptionPK, channelID)
+	log.Info().
+		Str("transcription_pk", transcriptionPK).
+		Msg("Admin deleting transcription")
 
 	// Initialize repositories
+	log.Debug().Msg("Initializing repositories")
 	transcriptionRepo, err := repository.NewTranscriptionRepository(ctx)
 	if err != nil {
-		log.Printf("ERROR: Failed to initialize transcription repository: %v", err)
+		log.Error().Err(err).Msg("Failed to initialize transcription repository")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
 	}
 
 	chunkRepo, err := repository.NewChunkRepository(ctx)
 	if err != nil {
-		log.Printf("ERROR: Failed to initialize chunk repository: %v", err)
+		log.Error().Err(err).Msg("Failed to initialize chunk repository")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
 	}
 
 	// Delete all chunks associated with this transcription
+	log.Debug().Msg("Listing chunks for deletion")
 	var chunks []*models.TranscriptionChunk
+	chunksDeleted := 0
+	chunksFailed := 0
+
 	if err := chunkRepo.ListChunksByTranscription(ctx, transcriptionPK, &chunks); err != nil {
-		log.Printf("WARN: Failed to list chunks for transcription %s: %v", transcriptionPK, err)
+		log.Warn().Err(err).Str("transcription_pk", transcriptionPK).Msg("Failed to list chunks for transcription")
 	} else {
-		log.Printf("INFO: Deleting %d chunks for transcription %s", len(chunks), transcriptionPK)
-		for _, chunk := range chunks {
+		log.Info().Int("chunk_count", len(chunks)).Msg("Deleting chunks for transcription")
+		for i, chunk := range chunks {
 			if err := chunkRepo.DeleteChunk(ctx, chunk.PK); err != nil {
-				log.Printf("ERROR: Failed to delete chunk %s: %v", chunk.PK, err)
+				log.Error().
+					Err(err).
+					Str("chunk_pk", chunk.PK).
+					Int("chunk_index", i).
+					Msg("Failed to delete chunk")
+				chunksFailed++
+			} else {
+				chunksDeleted++
+				log.Debug().
+					Str("chunk_pk", chunk.PK).
+					Int("chunk_index", i).
+					Msg("Chunk deleted successfully")
 			}
 		}
 	}
 
+	log.Info().
+		Int("chunks_deleted", chunksDeleted).
+		Int("chunks_failed", chunksFailed).
+		Msg("Chunk deletion completed")
+
 	// Delete the transcription itself
+	log.Debug().Msg("Deleting transcription record")
 	if err := transcriptionRepo.DeleteTranscription(ctx, transcriptionPK); err != nil {
-		log.Printf("ERROR: Failed to delete transcription %s: %v", transcriptionPK, err)
+		log.Error().Err(err).Str("transcription_pk", transcriptionPK).Msg("Failed to delete transcription")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete transcription"})
 	}
 
-	log.Printf("INFO: Successfully deleted transcription %s", transcriptionPK)
+	duration := time.Since(start)
+	log.Info().
+		Str("transcription_pk", transcriptionPK).
+		Int("chunks_deleted", chunksDeleted).
+		Int("chunks_failed", chunksFailed).
+		Dur("duration_ms", duration).
+		Msg("Transcription deleted successfully")
 
 	return response(http.StatusOK, DeleteResponse{
 		Message: "Transcription deleted successfully",

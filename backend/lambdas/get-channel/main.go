@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
-	"askly/backend/shared/auth"
+	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
 
@@ -28,45 +29,58 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	// Verify JWT token
-	authHeader := request.Headers["Authorization"]
-	if authHeader == "" {
-		authHeader = request.Headers["authorization"]
+	// Initialize logger with request context
+	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
+	log := logger.FromContext(ctx)
+
+	start := time.Now()
+	log.Info().Msg("Get channel request received")
+
+	// Extract user info from Cognito authorizer claims (already validated by API Gateway)
+	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
+	if !ok || claims == nil {
+		log.Error().Msg("No Cognito claims found in request context")
+		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
 	}
 
-	token, err := auth.ExtractTokenFromHeader(authHeader)
-	if err != nil {
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Missing or invalid authorization header"})
-	}
+	userID, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
 
-	claims, err := auth.ValidateToken(token)
-	if err != nil {
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Invalid or expired token"})
-	}
+	// Add user ID to logger context
+	ctx = logger.WithUserID(ctx, userID)
+	log = logger.FromContext(ctx)
 
-	// Only users can get channel details
-	if !claims.IsUser() {
-		return response(http.StatusForbidden, ErrorResponse{Error: "Access denied"})
-	}
+	log.Debug().Str("email", email).Msg("User requesting channel details")
 
 	// Get channel ID from path parameters
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
+		log.Error().Msg("Channel ID missing from path parameters")
 		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
 	}
 
+	// Add channel ID to logger context
+	ctx = logger.WithChannelID(ctx, channelID)
+	log = logger.FromContext(ctx)
+
 	// Initialize repository
+	log.Debug().Msg("Initializing channel repository")
 	channelRepo, err := repository.NewChannelRepository(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize channel repository")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
 	}
 
 	// Get channel
-	var channel models.Channel
 	channelPK := "CHANNEL#" + channelID
+	log.Debug().Str("channel_pk", channelPK).Msg("Fetching channel from database")
+	var channel models.Channel
 	if err := channelRepo.GetChannelByID(ctx, channelPK, &channel); err != nil {
+		log.Error().Err(err).Str("channel_pk", channelPK).Msg("Channel not found")
 		return response(http.StatusNotFound, ErrorResponse{Error: "Channel not found"})
 	}
+
+	log.Info().Str("channel_name", channel.Name).Msg("Channel retrieved successfully")
 
 	// Convert to response format
 	channelResponse := ChannelResponse{
@@ -77,6 +91,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		ThumbnailURL:     channel.ThumbnailURL,
 		YoutubeURL:       channel.YoutubeURL,
 	}
+
+	duration := time.Since(start)
+	log.Info().
+		Str("channel_name", channel.Name).
+		Dur("duration_ms", duration).
+		Msg("Get channel request completed")
 
 	return response(http.StatusOK, channelResponse)
 }
