@@ -25,7 +25,7 @@ type Admin struct {
 func NewUser(email, passwordHash string) *User {
 	now := time.Now()
 	return &User{
-		PK:           "USER#" + GenerateID(),
+		PK:           GenerateID(),
 		SK:           "PROFILE",
 		Email:        email,
 		PasswordHash: passwordHash,
@@ -37,7 +37,7 @@ func NewUser(email, passwordHash string) *User {
 // NewAdmin creates a new Admin with generated ID
 func NewAdmin(email, passwordHash string) *Admin {
 	return &Admin{
-		PK:           "ADMIN#" + GenerateID(),
+		PK:           GenerateID(),
 		SK:           "PROFILE",
 		Email:        email,
 		PasswordHash: passwordHash,
@@ -45,18 +45,12 @@ func NewAdmin(email, passwordHash string) *Admin {
 	}
 }
 
-// GetID extracts the ID from PK (removes "USER#" or "ADMIN#" prefix)
+// GetID returns the ID (PK is now the ID directly)
 func (u *User) GetID() string {
-	if len(u.PK) > 5 {
-		return u.PK[5:] // Remove "USER#" prefix
-	}
 	return u.PK
 }
 
-// GetID extracts the ID from PK
+// GetID returns the ID (PK is now the ID directly)
 func (a *Admin) GetID() string {
-	if len(a.PK) > 6 {
-		return a.PK[6:] // Remove "ADMIN#" prefix
-	}
 	return a.PK
 }

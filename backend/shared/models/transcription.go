@@ -31,7 +31,7 @@ type TranscriptionChunk struct {
 // NewTranscription creates a new Transcription with generated ID
 func NewTranscription(channelID, videoTitle, videoURL, videoID, fullText, uploadedBy string) *Transcription {
 	return &Transcription{
-		PK:         "TRANSCRIPTION#" + GenerateID(),
+		PK:         GenerateID(),
 		SK:         "METADATA",
 		ChannelID:  channelID,
 		VideoTitle: videoTitle,
@@ -47,7 +47,7 @@ func NewTranscription(channelID, videoTitle, videoURL, videoID, fullText, upload
 // NewTranscriptionChunk creates a new TranscriptionChunk with generated ID
 func NewTranscriptionChunk(transcriptionID, channelID, chunkText string, chunkIndex int, embedding []byte) *TranscriptionChunk {
 	return &TranscriptionChunk{
-		PK:              "CHUNK#" + GenerateID(),
+		PK:              GenerateID(),
 		SK:              "METADATA",
 		TranscriptionID: transcriptionID,
 		ChannelID:       channelID,
@@ -58,18 +58,12 @@ func NewTranscriptionChunk(transcriptionID, channelID, chunkText string, chunkIn
 	}
 }
 
-// GetID extracts the ID from PK
+// GetID returns the ID (PK is now the ID directly)
 func (t *Transcription) GetID() string {
-	if len(t.PK) > 14 {
-		return t.PK[14:] // Remove "TRANSCRIPTION#" prefix
-	}
 	return t.PK
 }
 
-// GetID extracts the ID from PK
+// GetID returns the ID (PK is now the ID directly)
 func (tc *TranscriptionChunk) GetID() string {
-	if len(tc.PK) > 6 {
-		return tc.PK[6:] // Remove "CHUNK#" prefix
-	}
 	return tc.PK
 }

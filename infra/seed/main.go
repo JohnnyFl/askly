@@ -78,7 +78,7 @@ func main() {
 func seedChannels(ctx context.Context, client *dynamodb.Client) error {
 	channels := []Channel{
 		{
-			PK:               fmt.Sprintf("CHANNEL#%s", uuid.New().String()),
+			PK:               uuid.New().String(),
 			SK:               "METADATA",
 			Name:             "Y Combinator",
 			Description:      "Y Combinator created a new model for funding early stage startups. Twice a year we invest in a large number of startups. Learn about startups, entrepreneurship, and more.",
@@ -88,7 +88,7 @@ func seedChannels(ctx context.Context, client *dynamodb.Client) error {
 			CreatedAt:        time.Now().Format(time.RFC3339),
 		},
 		{
-			PK:               fmt.Sprintf("CHANNEL#%s", uuid.New().String()),
+			PK:               uuid.New().String(),
 			SK:               "METADATA",
 			Name:             "Startup Grind",
 			Description:      "Startup Grind is the world's largest startup community. We educate, inspire, and connect entrepreneurs through local and global events, online platforms, and our media company.",
@@ -237,9 +237,8 @@ func seedAdmin(ctx context.Context, dynamoClient *dynamodb.Client, cognitoClient
 	fmt.Println("✅ Set permanent password")
 
 	// Create admin record in DynamoDB
-	adminID := uuid.New().String()
 	admin := Admin{
-		PK:        fmt.Sprintf("ADMIN#%s", adminID),
+		PK:        uuid.New().String(),
 		SK:        "PROFILE",
 		Email:     email,
 		CognitoID: cognitoUserID,

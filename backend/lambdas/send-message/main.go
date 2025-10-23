@@ -103,10 +103,9 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Verify channel exists
 	var channel models.Channel
-	channelPK := "CHANNEL#" + channelID
-	log.Debug().Str("channel_pk", channelPK).Msg("Verifying channel exists")
-	if err := channelRepo.GetChannelByID(ctx, channelPK, &channel); err != nil {
-		log.Error().Err(err).Str("channel_pk", channelPK).Msg("Channel not found")
+	log.Debug().Str("channel_id", channelID).Msg("Verifying channel exists")
+	if err := channelRepo.GetChannelByID(ctx, channelID, &channel); err != nil {
+		log.Error().Err(err).Str("channel_id", channelID).Msg("Channel not found")
 		return response(http.StatusNotFound, ErrorResponse{Error: fmt.Sprintf("Channel not found: %v", err)})
 	}
 
@@ -152,7 +151,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		log.Warn().Msg("No relevant chunks found for question")
 		message := models.NewChatMessage(
 			userID,
-			channelPK,
+			channelID,
 			req.Question,
 			"I couldn't find any relevant information in this channel's videos to answer your question. The channel may not have any transcriptions uploaded yet.",
 			[]models.MessageSource{},
@@ -241,7 +240,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Create and save message
 	message := models.NewChatMessage(
 		userID,
-		channelPK,
+		channelID,
 		req.Question,
 		answer,
 		sources,

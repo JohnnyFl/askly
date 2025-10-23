@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"askly/backend/shared/logger"
@@ -66,8 +65,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	ctx = logger.WithChannelID(ctx, channelID)
 	log = logger.FromContext(ctx)
 
-	channelPK := "CHANNEL#" + channelID
-	log.Info().Str("channel_pk", channelPK).Msg("Admin listing transcriptions for channel")
+	log.Info().Str("channel_id", channelID).Msg("Admin listing transcriptions for channel")
 
 	// Initialize repository
 	log.Debug().Msg("Initializing transcription repository")
@@ -80,8 +78,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Get all transcriptions for this channel
 	log.Debug().Msg("Fetching transcriptions from database")
 	var transcriptions []*models.Transcription
-	if err := transcriptionRepo.ListTranscriptionsByChannel(ctx, channelPK, &transcriptions); err != nil {
-		log.Error().Err(err).Str("channel_pk", channelPK).Msg("Failed to list transcriptions")
+	if err := transcriptionRepo.ListTranscriptionsByChannel(ctx, channelID, &transcriptions); err != nil {
+		log.Error().Err(err).Str("channel_id", channelID).Msg("Failed to list transcriptions")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to fetch transcriptions"})
 	}
 
@@ -92,7 +90,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	transcriptionResponses := make([]TranscriptionResponse, len(transcriptions))
 	for i, transcription := range transcriptions {
 		transcriptionResponses[i] = TranscriptionResponse{
-			ID:         strings.TrimPrefix(transcription.PK, "TRANSCRIPTION#"),
+			ID:         transcription.PK,
 			VideoTitle: transcription.VideoTitle,
 			VideoURL:   transcription.VideoURL,
 			UploadDate: transcription.UploadedAt.Format("2006-01-02T15:04:05Z07:00"),

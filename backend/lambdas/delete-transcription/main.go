@@ -63,9 +63,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	ctx = logger.WithTranscriptionID(ctx, transcriptionID)
 	log = logger.FromContext(ctx)
 
-	transcriptionPK := "TRANSCRIPTION#" + transcriptionID
 	log.Info().
-		Str("transcription_pk", transcriptionPK).
+		Str("transcription_id", transcriptionID).
 		Msg("Admin deleting transcription")
 
 	// Initialize repositories
@@ -88,8 +87,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	chunksDeleted := 0
 	chunksFailed := 0
 
-	if err := chunkRepo.ListChunksByTranscription(ctx, transcriptionPK, &chunks); err != nil {
-		log.Warn().Err(err).Str("transcription_pk", transcriptionPK).Msg("Failed to list chunks for transcription")
+	if err := chunkRepo.ListChunksByTranscription(ctx, transcriptionID, &chunks); err != nil {
+		log.Warn().Err(err).Str("transcription_id", transcriptionID).Msg("Failed to list chunks for transcription")
 	} else {
 		log.Info().Int("chunk_count", len(chunks)).Msg("Deleting chunks for transcription")
 		for i, chunk := range chunks {
@@ -117,14 +116,14 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Delete the transcription itself
 	log.Debug().Msg("Deleting transcription record")
-	if err := transcriptionRepo.DeleteTranscription(ctx, transcriptionPK); err != nil {
-		log.Error().Err(err).Str("transcription_pk", transcriptionPK).Msg("Failed to delete transcription")
+	if err := transcriptionRepo.DeleteTranscription(ctx, transcriptionID); err != nil {
+		log.Error().Err(err).Str("transcription_id", transcriptionID).Msg("Failed to delete transcription")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete transcription"})
 	}
 
 	duration := time.Since(start)
 	log.Info().
-		Str("transcription_pk", transcriptionPK).
+		Str("transcription_id", transcriptionID).
 		Int("chunks_deleted", chunksDeleted).
 		Int("chunks_failed", chunksFailed).
 		Dur("duration_ms", duration).

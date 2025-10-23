@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"askly/backend/shared/logger"
@@ -81,7 +80,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelResponses := make([]ChannelResponse, len(channels))
 	for i, channel := range channels {
 		channelResponses[i] = ChannelResponse{
-			ID:               strings.TrimPrefix(channel.PK, "CHANNEL#"),
+			ID:               channel.PK,
 			Name:             channel.Name,
 			YoutubeChannelID: channel.YoutubeChannelID,
 			Description:      channel.Description,

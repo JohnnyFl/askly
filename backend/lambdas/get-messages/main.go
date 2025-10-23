@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"askly/backend/shared/logger"
@@ -71,9 +70,6 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	log.Debug().Msg("Fetching messages for user and channel")
 
-	// Add CHANNEL# prefix for DynamoDB query
-	channelPK := "CHANNEL#" + channelID
-
 	// Initialize repository
 	log.Debug().Msg("Initializing message repository")
 	messageRepo, err := repository.NewMessageRepository(ctx)
@@ -83,10 +79,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Get messages for this user and channel
-	log.Debug().Str("channel_pk", channelPK).Msg("Fetching messages from database")
+	log.Debug().Str("channel_id", channelID).Msg("Fetching messages from database")
 	var messages []*models.ChatMessage
-	if err := messageRepo.ListMessagesByChannel(ctx, channelPK, &messages); err != nil {
-		log.Error().Err(err).Str("channel_pk", channelPK).Msg("Failed to fetch messages from DynamoDB")
+	if err := messageRepo.ListMessagesByChannel(ctx, channelID, &messages); err != nil {
+		log.Error().Err(err).Str("channel_id", channelID).Msg("Failed to fetch messages from DynamoDB")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to fetch messages: %v", err)})
 	}
 
@@ -95,11 +91,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	// Filter messages by user (since we query by channel, need to filter)
 	log.Debug().Msg("Filtering messages for current user")
 	var userMessages []MessageResponse
-	userIDWithPrefix := "USER#" + userID
 	for _, msg := range messages {
-		if msg.UserID == userIDWithPrefix || msg.UserID == userID {
+		if msg.UserID == userID {
 			userMessages = append(userMessages, MessageResponse{
-				ID:        strings.TrimPrefix(msg.PK, "MESSAGE#"),
+				ID:        msg.PK,
 				UserID:    msg.UserID,
 				ChannelID: msg.ChannelID,
 				Question:  msg.Question,

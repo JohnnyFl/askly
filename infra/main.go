@@ -295,6 +295,7 @@ func main() {
 			UserPoolId: userPool.ID(),
 			ExplicitAuthFlows: pulumi.StringArray{
 				pulumi.String("ALLOW_USER_PASSWORD_AUTH"),
+				pulumi.String("ALLOW_ADMIN_USER_PASSWORD_AUTH"),
 				pulumi.String("ALLOW_REFRESH_TOKEN_AUTH"),
 				pulumi.String("ALLOW_USER_SRP_AUTH"),
 			},
@@ -439,7 +440,8 @@ func main() {
 							"cognito-idp:AdminCreateUser",
 							"cognito-idp:AdminSetUserPassword",
 							"cognito-idp:AdminGetUser",
-							"cognito-idp:AdminUpdateUserAttributes"
+							"cognito-idp:AdminUpdateUserAttributes",
+							"cognito-idp:AdminConfirmSignUp"
 						],
 						"Resource": "arn:aws:cognito-idp:*:*:userpool/*"
 					}

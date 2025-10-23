@@ -17,7 +17,7 @@ type Channel struct {
 // NewChannel creates a new Channel with generated ID
 func NewChannel(name, description, thumbnailURL, youtubeURL, youtubeChannelID string) *Channel {
 	return &Channel{
-		PK:               "CHANNEL#" + GenerateID(),
+		PK:               GenerateID(),
 		SK:               "METADATA",
 		Name:             name,
 		Description:      description,
@@ -28,10 +28,7 @@ func NewChannel(name, description, thumbnailURL, youtubeURL, youtubeChannelID st
 	}
 }
 
-// GetID extracts the ID from PK
+// GetID returns the ID (PK is now the ID directly)
 func (c *Channel) GetID() string {
-	if len(c.PK) > 8 {
-		return c.PK[8:] // Remove "CHANNEL#" prefix
-	}
 	return c.PK
 }

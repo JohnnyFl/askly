@@ -25,7 +25,7 @@ type MessageSource struct {
 // NewChatMessage creates a new ChatMessage with generated ID
 func NewChatMessage(userID, channelID, question, answer string, sources []MessageSource) *ChatMessage {
 	return &ChatMessage{
-		PK:        "MESSAGE#" + GenerateID(),
+		PK:        GenerateID(),
 		SK:        "METADATA",
 		UserID:    userID,
 		ChannelID: channelID,
@@ -36,10 +36,7 @@ func NewChatMessage(userID, channelID, question, answer string, sources []Messag
 	}
 }
 
-// GetID extracts the ID from PK
+// GetID returns the ID (PK is now the ID directly)
 func (m *ChatMessage) GetID() string {
-	if len(m.PK) > 8 {
-		return m.PK[8:] // Remove "MESSAGE#" prefix
-	}
 	return m.PK
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"askly/backend/shared/logger"
@@ -72,11 +71,10 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	}
 
 	// Get channel
-	channelPK := "CHANNEL#" + channelID
-	log.Debug().Str("channel_pk", channelPK).Msg("Fetching channel from database")
+	log.Debug().Str("channel_id", channelID).Msg("Fetching channel from database")
 	var channel models.Channel
-	if err := channelRepo.GetChannelByID(ctx, channelPK, &channel); err != nil {
-		log.Error().Err(err).Str("channel_pk", channelPK).Msg("Channel not found")
+	if err := channelRepo.GetChannelByID(ctx, channelID, &channel); err != nil {
+		log.Error().Err(err).Str("channel_id", channelID).Msg("Channel not found")
 		return response(http.StatusNotFound, ErrorResponse{Error: "Channel not found"})
 	}
 
@@ -84,7 +82,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Convert to response format
 	channelResponse := ChannelResponse{
-		ID:               strings.TrimPrefix(channel.PK, "CHANNEL#"),
+		ID:               channel.PK,
 		Name:             channel.Name,
 		YoutubeChannelID: channel.YoutubeChannelID,
 		Description:      channel.Description,
