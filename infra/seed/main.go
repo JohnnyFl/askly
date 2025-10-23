@@ -11,8 +11,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
-	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	cognitotypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/google/uuid"
 )
 
@@ -99,6 +100,17 @@ func seedChannels(ctx context.Context, client *dynamodb.Client) error {
 	}
 
 	for _, channel := range channels {
+		// Check if channel with this YouTube ID already exists
+		exists, err := channelExistsByYoutubeID(ctx, client, channel.YoutubeChannelID)
+		if err != nil {
+			return fmt.Errorf("failed to check if channel exists: %w", err)
+		}
+
+		if exists {
+			fmt.Printf("⏭️  Skipping channel: %s (already exists with YouTube ID: %s)\n", channel.Name, channel.YoutubeChannelID)
+			continue
+		}
+
 		item, err := attributevalue.MarshalMap(channel)
 		if err != nil {
 			return fmt.Errorf("failed to marshal channel: %w", err)
@@ -118,6 +130,47 @@ func seedChannels(ctx context.Context, client *dynamodb.Client) error {
 	return nil
 }
 
+// channelExistsByYoutubeID checks if a channel with the given YouTube ID exists
+func channelExistsByYoutubeID(ctx context.Context, client *dynamodb.Client, youtubeChannelID string) (bool, error) {
+	// Query using GSI if available, otherwise scan
+	input := &dynamodb.QueryInput{
+		TableName:              aws.String("askly-channels"),
+		IndexName:              aws.String("youtube_channel_id-index"),
+		KeyConditionExpression: aws.String("youtube_channel_id = :ytid"),
+		ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
+			":ytid": &dynamodbtypes.AttributeValueMemberS{Value: youtubeChannelID},
+		},
+		Limit: aws.Int32(1),
+	}
+
+	output, err := client.Query(ctx, input)
+	if err != nil {
+		// If GSI doesn't exist, fall back to scan (acceptable for seed script)
+		return channelExistsByScan(ctx, client, youtubeChannelID)
+	}
+
+	return len(output.Items) > 0, nil
+}
+
+// channelExistsByScan checks if a channel exists by scanning (fallback method)
+func channelExistsByScan(ctx context.Context, client *dynamodb.Client, youtubeChannelID string) (bool, error) {
+	input := &dynamodb.ScanInput{
+		TableName:        aws.String("askly-channels"),
+		FilterExpression: aws.String("youtube_channel_id = :ytid"),
+		ExpressionAttributeValues: map[string]dynamodbtypes.AttributeValue{
+			":ytid": &dynamodbtypes.AttributeValueMemberS{Value: youtubeChannelID},
+		},
+		Limit: aws.Int32(1),
+	}
+
+	output, err := client.Scan(ctx, input)
+	if err != nil {
+		return false, err
+	}
+
+	return len(output.Items) > 0, nil
+}
+
 func seedAdmin(ctx context.Context, dynamoClient *dynamodb.Client, cognitoClient *cognitoidentityprovider.Client, adminPoolID string) error {
 	email := "admin@askly.com"
 	password := "AdminPass123!" // Meets Cognito admin requirements: min 12 chars, uppercase, lowercase, number, symbol
@@ -129,7 +182,7 @@ func seedAdmin(ctx context.Context, dynamoClient *dynamodb.Client, cognitoClient
 		UserPoolId:        aws.String(adminPoolID),
 		Username:          aws.String(email),
 		TemporaryPassword: aws.String(password),
-		UserAttributes: []types.AttributeType{
+		UserAttributes: []cognitotypes.AttributeType{
 			{
 				Name:  aws.String("email"),
 				Value: aws.String(email),
@@ -139,11 +192,17 @@ func seedAdmin(ctx context.Context, dynamoClient *dynamodb.Client, cognitoClient
 				Value: aws.String("true"),
 			},
 		},
-		MessageAction: types.MessageActionTypeSuppress, // Don't send welcome email
+		MessageAction: cognitotypes.MessageActionTypeSuppress, // Don't send welcome email
 	}
 
 	createUserOutput, err := cognitoClient.AdminCreateUser(ctx, createUserInput)
 	if err != nil {
+		// Check if user already exists
+		if err.Error() == "UsernameExistsException" {
+			fmt.Printf("⏭️  Admin user already exists in Cognito (email: %s)\n", email)
+			fmt.Println("📝 If you need to reset the password, use AWS Cognito console")
+			return nil
+		}
 		return fmt.Errorf("failed to create admin in Cognito: %w", err)
 	}
 

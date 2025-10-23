@@ -2,7 +2,10 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"os"
+
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 )
 
 const channelsTableEnv = "DYNAMODB_CHANNELS_TABLE"
@@ -54,4 +57,23 @@ func (r *ChannelRepository) UpdateChannel(ctx context.Context, channelID string,
 // DeleteChannel deletes a channel
 func (r *ChannelRepository) DeleteChannel(ctx context.Context, channelID string) error {
 	return r.db.DeleteItem(ctx, r.tableName, channelID, "METADATA")
+}
+
+// GetChannelByYoutubeID gets a channel by YouTube channel ID using GSI
+func (r *ChannelRepository) GetChannelByYoutubeID(ctx context.Context, youtubeChannelID string, result interface{}) error {
+	items, err := r.db.QueryByGSIRaw(ctx, r.tableName, "youtube_channel_id-index", "youtube_channel_id", youtubeChannelID)
+	if err != nil {
+		return err
+	}
+
+	if len(items) == 0 {
+		return nil // No channel found (not an error, just empty result)
+	}
+
+	// Unmarshal the first channel into the result
+	if err := attributevalue.UnmarshalMap(items[0], result); err != nil {
+		return fmt.Errorf("failed to unmarshal channel: %w", err)
+	}
+
+	return nil
 }
