@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Video, FileText, Loader2, Upload as UploadIcon } from 'lucide-react';
+import { ArrowLeft, Video, FileText, Loader2, Upload as UploadIcon, AlertCircle } from 'lucide-react';
 import  FileUpload  from '@/components/admin/FileUpload';
 import { TranscriptionList, Transcription } from '@/components/admin/TranscriptionList';
 import { FadeInWhenVisible } from '@/components/animations/FadeInWhenVisible';
@@ -32,6 +32,7 @@ export default function AdminChannelUploadPage() {
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
   const [loading, setLoading] = useState(true);
   const [transcriptionsLoading, setTranscriptionsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (channelId) {
@@ -50,19 +51,22 @@ export default function AdminChannelUploadPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch channel');
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to fetch channel');
       }
 
       const data = await response.json();
       setChannel(data.channel);
+      setError(null);
     } catch (error) {
       console.error('Error fetching channel:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load channel information';
+      setError(errorMessage);
       toast({
         title: 'Error',
-        description: 'Failed to load channel information',
+        description: errorMessage,
         variant: 'destructive',
       });
-      router.push('/admin/channels');
     } finally {
       setLoading(false);
     }
@@ -203,8 +207,50 @@ export default function AdminChannelUploadPage() {
     );
   }
 
-  if (!channel) {
-    return null;
+  if (error || !channel) {
+    return (
+      <div className="space-y-8">
+        {/* Back Button */}
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/admin/channels')}
+          className="gap-2 rounded-xl hover:bg-purple-50 hover:text-[#6D28D9]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Channels
+        </Button>
+
+        {/* Error Card */}
+        <Card className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-red-200/50 p-8">
+          <div className="flex flex-col items-center justify-center text-center py-12">
+            <div className="h-20 w-20 bg-red-100 rounded-full flex items-center justify-center mb-6">
+              <AlertCircle className="h-10 w-10 text-red-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Channel Not Found</h2>
+            <p className="text-slate-600 mb-6 max-w-md">
+              {error || 'The channel you are looking for could not be found or you do not have permission to access it.'}
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => fetchChannel()}
+                variant="outline"
+                className="gap-2 rounded-xl border-2 border-purple-200 hover:bg-purple-50"
+              >
+                <Loader2 className="h-4 w-4" />
+                Try Again
+              </Button>
+              <Button
+                onClick={() => router.push('/admin/channels')}
+                className="gap-2 rounded-xl bg-gradient-to-r from-[#6D28D9] to-[#5B21B6] hover:from-[#5B21B6] hover:to-[#4C1D95]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Channels
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (

@@ -10,6 +10,7 @@ import (
 	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
+	"askly/backend/shared/response"
 	"askly/backend/shared/services"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -34,6 +35,11 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -45,7 +51,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
 	if !ok || claims == nil {
 		log.Error().Msg("No Cognito claims found in request context")
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return response.Error(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	adminID, _ := claims["sub"].(string)
@@ -61,7 +67,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
 		log.Error().Msg("Channel ID missing from path parameters")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
+		return response.Error(http.StatusBadRequest, "Channel ID is required")
 	}
 
 	// Add channel ID to logger context
@@ -72,13 +78,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	var req UploadRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
 		log.Error().Err(err).Msg("Failed to parse request body")
-		return response(http.StatusBadRequest, ErrorResponse{Error: fmt.Sprintf("Invalid request body: %v", err)})
+		return response.Error(http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
 	}
 
 	// Validate input
 	if req.VideoTitle == "" || req.Transcription == "" {
 		log.Warn().Msg("Missing required fields in request")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "video_title and transcription are required"})
+		return response.Error(http.StatusBadRequest, "video_title and transcription are required")
 	}
 
 	log.Info().
@@ -91,19 +97,19 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelRepo, err := repository.NewChannelRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize channel repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	transcriptionRepo, err := repository.NewTranscriptionRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize transcription repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	chunkRepo, err := repository.NewChunkRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize chunk repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	// Verify channel exists
@@ -111,7 +117,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Debug().Str("channel_id", channelID).Msg("Verifying channel exists")
 	if err := channelRepo.GetChannelByID(ctx, channelID, &channel); err != nil {
 		log.Error().Err(err).Str("channel_id", channelID).Msg("Channel not found")
-		return response(http.StatusNotFound, ErrorResponse{Error: fmt.Sprintf("Channel not found: %v", err)})
+		return response.Error(http.StatusNotFound, fmt.Sprintf("Channel not found: %v", err))
 	}
 
 	log.Info().Str("channel_name", channel.Name).Msg("Channel verified")
@@ -122,7 +128,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	bedrockService, err := services.NewBedrockService(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize Bedrock service")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize AI service: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize AI service: %v", err))
 	}
 
 	// Create transcription record
@@ -138,7 +144,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Debug().Msg("Creating transcription record")
 	if err := transcriptionRepo.CreateTranscription(ctx, transcription); err != nil {
 		log.Error().Err(err).Msg("Failed to create transcription in DynamoDB")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to create transcription: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to create transcription: %v", err))
 	}
 
 	transcriptionID := transcription.GetID()
@@ -209,23 +215,11 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Dur("total_duration_ms", duration).
 		Msg("Transcription upload complete")
 
-	return response(http.StatusCreated, UploadResponse{
+	return response.JSON(http.StatusCreated, UploadResponse{
 		Message:         fmt.Sprintf("Transcription uploaded and processed successfully (%d/%d chunks)", successfulChunks, len(chunks)),
 		TranscriptionID: transcriptionID,
 		ChunksCreated:   successfulChunks,
 	})
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
 }
 
 func main() {

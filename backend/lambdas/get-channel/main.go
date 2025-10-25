@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
 	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
+	"askly/backend/shared/response"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -28,6 +28,11 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -39,7 +44,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
 	if !ok || claims == nil {
 		log.Error().Msg("No Cognito claims found in request context")
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return response.Error(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	userID, _ := claims["sub"].(string)
@@ -55,7 +60,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
 		log.Error().Msg("Channel ID missing from path parameters")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
+		return response.Error(http.StatusBadRequest, "Channel ID is required")
 	}
 
 	// Add channel ID to logger context
@@ -67,7 +72,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelRepo, err := repository.NewChannelRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize channel repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+		return response.Error(http.StatusInternalServerError, "Internal server error")
 	}
 
 	// Get channel
@@ -75,7 +80,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	var channel models.Channel
 	if err := channelRepo.GetChannelByID(ctx, channelID, &channel); err != nil {
 		log.Error().Err(err).Str("channel_id", channelID).Msg("Channel not found")
-		return response(http.StatusNotFound, ErrorResponse{Error: "Channel not found"})
+		return response.Error(http.StatusNotFound, "Channel not found")
 	}
 
 	log.Info().Str("channel_name", channel.Name).Msg("Channel retrieved successfully")
@@ -96,19 +101,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Dur("duration_ms", duration).
 		Msg("Get channel request completed")
 
-	return response(http.StatusOK, channelResponse)
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
+	return response.JSON(http.StatusOK, channelResponse)
 }
 
 func main() {

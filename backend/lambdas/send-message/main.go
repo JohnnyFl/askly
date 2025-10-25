@@ -10,6 +10,7 @@ import (
 	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
+	"askly/backend/shared/response"
 	"askly/backend/shared/services"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -37,6 +38,11 @@ type ErrorResponse struct {
 var vectorSearch *services.VectorSearchService
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -48,7 +54,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
 	if !ok || claims == nil {
 		log.Error().Msg("No Cognito claims found in request context")
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return response.Error(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	userID, _ := claims["sub"].(string)
@@ -64,7 +70,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
 		log.Error().Msg("Channel ID missing from path parameters")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
+		return response.Error(http.StatusBadRequest, "Channel ID is required")
 	}
 
 	// Add channel ID to logger context
@@ -75,13 +81,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	var req SendMessageRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
 		log.Error().Err(err).Msg("Failed to parse request body")
-		return response(http.StatusBadRequest, ErrorResponse{Error: fmt.Sprintf("Invalid request body: %v", err)})
+		return response.Error(http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
 	}
 
 	// Validate input
 	if req.Question == "" {
 		log.Warn().Msg("Empty question in request")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "question is required"})
+		return response.Error(http.StatusBadRequest, "question is required")
 	}
 
 	// Determine prompt style (default to "direct")
@@ -113,13 +119,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelRepo, err := repository.NewChannelRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize channel repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	messageRepo, err := repository.NewMessageRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize message repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	// Verify channel exists
@@ -127,7 +133,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Debug().Str("channel_id", channelID).Msg("Verifying channel exists")
 	if err := channelRepo.GetChannelByID(ctx, channelID, &channel); err != nil {
 		log.Error().Err(err).Str("channel_id", channelID).Msg("Channel not found")
-		return response(http.StatusNotFound, ErrorResponse{Error: fmt.Sprintf("Channel not found: %v", err)})
+		return response.Error(http.StatusNotFound, fmt.Sprintf("Channel not found: %v", err))
 	}
 
 	log.Info().Str("channel_name", channel.Name).Msg("Channel verified")
@@ -138,7 +144,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		vectorSearch, err = services.NewVectorSearchService(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to initialize vector search service")
-			return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize search service: %v", err)})
+			return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize search service: %v", err))
 		}
 	}
 
@@ -148,7 +154,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		log.Info().Msg("Loading knowledge base chunks (cold start)")
 		if err := vectorSearch.LoadChunks(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to load chunks from DynamoDB")
-			return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to load knowledge base: %v", err)})
+			return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to load knowledge base: %v", err))
 		}
 		log.Info().Dur("load_duration_ms", time.Since(loadStart)).Msg("Knowledge base loaded successfully")
 	}
@@ -159,7 +165,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	searchResults, err := vectorSearch.SearchByChannel(ctx, channelID, req.Question, 5)
 	if err != nil {
 		log.Error().Err(err).Msg("Vector search failed")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to search knowledge base: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to search knowledge base: %v", err))
 	}
 
 	log.Info().
@@ -180,11 +186,11 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 		if err := messageRepo.CreateMessage(ctx, message); err != nil {
 			log.Error().Err(err).Msg("Failed to save empty message")
-			return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to save message: %v", err)})
+			return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to save message: %v", err))
 		}
 
 		log.Info().Str("message_id", message.GetID()).Msg("Returned empty answer")
-		return response(http.StatusOK, SendMessageResponse{
+		return response.JSON(http.StatusOK, SendMessageResponse{
 			MessageID: message.GetID(),
 			Question:  message.Question,
 			Answer:    message.Answer,
@@ -197,7 +203,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	transcriptionRepo, err := repository.NewTranscriptionRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize transcription repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	// Extract context chunks and sources
@@ -241,7 +247,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	bedrockService, err := services.NewBedrockService(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize Bedrock service")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize AI service: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize AI service: %v", err))
 	}
 
 	// Generate answer using Claude with RAG and selected prompt style
@@ -253,7 +259,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	answer, err := bedrockService.GenerateAnswerWithStyle(ctx, req.Question, contextChunks, promptStyle)
 	if err != nil {
 		log.Error().Err(err).Msg("Bedrock GenerateAnswer failed")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to generate answer: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to generate answer: %v", err))
 	}
 
 	log.Info().
@@ -273,7 +279,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Debug().Msg("Saving message to DynamoDB")
 	if err := messageRepo.CreateMessage(ctx, message); err != nil {
 		log.Error().Err(err).Msg("Failed to save message to DynamoDB")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to save message: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to save message: %v", err))
 	}
 
 	duration := time.Since(start)
@@ -284,7 +290,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Dur("total_duration_ms", duration).
 		Msg("Send message request completed successfully")
 
-	return response(http.StatusOK, SendMessageResponse{
+	return response.JSON(http.StatusOK, SendMessageResponse{
 		MessageID:   message.GetID(),
 		Question:    message.Question,
 		Answer:      message.Answer,
@@ -298,18 +304,6 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
 }
 
 func main() {

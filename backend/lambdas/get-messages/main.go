@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -10,6 +9,7 @@ import (
 	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
+	"askly/backend/shared/response"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -34,6 +34,11 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -45,7 +50,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
 	if !ok || claims == nil {
 		log.Error().Msg("No Cognito claims found in request context")
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return response.Error(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	userID, _ := claims["sub"].(string)
@@ -61,7 +66,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelID := request.PathParameters["id"]
 	if channelID == "" {
 		log.Error().Msg("Channel ID missing from path parameters")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID is required"})
+		return response.Error(http.StatusBadRequest, "Channel ID is required")
 	}
 
 	// Add channel ID to logger context
@@ -75,7 +80,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	messageRepo, err := repository.NewMessageRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize message repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize repository: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
 	}
 
 	// Get messages for this user and channel
@@ -83,7 +88,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	var messages []*models.ChatMessage
 	if err := messageRepo.ListMessagesByChannel(ctx, channelID, &messages); err != nil {
 		log.Error().Err(err).Str("channel_id", channelID).Msg("Failed to fetch messages from DynamoDB")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to fetch messages: %v", err)})
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to fetch messages: %v", err))
 	}
 
 	log.Debug().Int("total_messages", len(messages)).Msg("Messages fetched from database")
@@ -112,21 +117,9 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Dur("duration_ms", duration).
 		Msg("Get messages request completed")
 
-	return response(http.StatusOK, GetMessagesResponse{
+	return response.JSON(http.StatusOK, GetMessagesResponse{
 		Messages: userMessages,
 	})
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
 }
 
 func main() {

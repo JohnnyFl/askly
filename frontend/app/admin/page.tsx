@@ -62,17 +62,8 @@ export default function AdminDashboard() {
         setStats(statsData);
       }
 
-      // Fetch recent activity
-      const activityResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/activity`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (activityResponse.ok) {
-        const activityData = await activityResponse.json();
-        setRecentActivity(activityData.activities || []);
-      }
+      // Note: Activity endpoint not yet implemented
+      // setRecentActivity will remain empty array
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {

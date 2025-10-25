@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
 	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
+	"askly/backend/shared/response"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -23,6 +23,11 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -34,7 +39,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
 	if !ok || claims == nil {
 		log.Error().Msg("No Cognito claims found in request context")
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return response.Error(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	adminID, _ := claims["sub"].(string)
@@ -55,7 +60,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			Str("channel_id", channelID).
 			Str("transcription_id", transcriptionID).
 			Msg("Missing required path parameters")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Channel ID and Transcription ID are required"})
+		return response.Error(http.StatusBadRequest, "Channel ID and Transcription ID are required")
 	}
 
 	// Add IDs to logger context
@@ -72,13 +77,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	transcriptionRepo, err := repository.NewTranscriptionRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize transcription repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+		return response.Error(http.StatusInternalServerError, "Internal server error")
 	}
 
 	chunkRepo, err := repository.NewChunkRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize chunk repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+		return response.Error(http.StatusInternalServerError, "Internal server error")
 	}
 
 	// Delete all chunks associated with this transcription
@@ -118,7 +123,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Debug().Msg("Deleting transcription record")
 	if err := transcriptionRepo.DeleteTranscription(ctx, transcriptionID); err != nil {
 		log.Error().Err(err).Str("transcription_id", transcriptionID).Msg("Failed to delete transcription")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to delete transcription"})
+		return response.Error(http.StatusInternalServerError, "Failed to delete transcription")
 	}
 
 	duration := time.Since(start)
@@ -129,21 +134,9 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Dur("duration_ms", duration).
 		Msg("Transcription deleted successfully")
 
-	return response(http.StatusOK, DeleteResponse{
+	return response.JSON(http.StatusOK, DeleteResponse{
 		Message: "Transcription deleted successfully",
 	})
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
 }
 
 func main() {

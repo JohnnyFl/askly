@@ -727,6 +727,72 @@ func main() {
 		// Get root resource
 		rootResourceID := api.RootResourceId
 
+		// Store all integrations for deployment dependencies
+		var allIntegrations []pulumi.Resource
+
+		// Helper function to add OPTIONS method with CORS to a resource
+		addOptionsMethod := func(resourceID pulumi.IDOutput, resourceName string) error {
+			// Create OPTIONS method
+			optionsMethod, err := apigateway.NewMethod(ctx, resourceName+"-options-method", &apigateway.MethodArgs{
+				RestApi:       api.ID(),
+				ResourceId:    resourceID,
+				HttpMethod:    pulumi.String("OPTIONS"),
+				Authorization: pulumi.String("NONE"),
+			})
+			if err != nil {
+				return err
+			}
+
+			// Create MOCK integration for OPTIONS (depends on method)
+			optionsIntegration, err := apigateway.NewIntegration(ctx, resourceName+"-options-integration", &apigateway.IntegrationArgs{
+				RestApi:    api.ID(),
+				ResourceId: resourceID,
+				HttpMethod: pulumi.String("OPTIONS"),
+				Type:       pulumi.String("MOCK"),
+				RequestTemplates: pulumi.StringMap{
+					"application/json": pulumi.String(`{"statusCode": 200}`),
+				},
+			}, pulumi.DependsOn([]pulumi.Resource{optionsMethod}))
+			if err != nil {
+				return err
+			}
+			allIntegrations = append(allIntegrations, optionsIntegration)
+
+			// Create OPTIONS method response (depends on method)
+			optionsMethodResponse, err := apigateway.NewMethodResponse(ctx, resourceName+"-options-method-response", &apigateway.MethodResponseArgs{
+				RestApi:    api.ID(),
+				ResourceId: resourceID,
+				HttpMethod: pulumi.String("OPTIONS"),
+				StatusCode: pulumi.String("200"),
+				ResponseParameters: pulumi.BoolMap{
+					"method.response.header.Access-Control-Allow-Headers": pulumi.Bool(true),
+					"method.response.header.Access-Control-Allow-Methods": pulumi.Bool(true),
+					"method.response.header.Access-Control-Allow-Origin":  pulumi.Bool(true),
+				},
+			}, pulumi.DependsOn([]pulumi.Resource{optionsMethod}))
+			if err != nil {
+				return err
+			}
+
+			// Create OPTIONS integration response (depends on integration AND method response)
+			_, err = apigateway.NewIntegrationResponse(ctx, resourceName+"-options-integration-response", &apigateway.IntegrationResponseArgs{
+				RestApi:    api.ID(),
+				ResourceId: resourceID,
+				HttpMethod: pulumi.String("OPTIONS"),
+				StatusCode: pulumi.String("200"),
+				ResponseParameters: pulumi.StringMap{
+					"method.response.header.Access-Control-Allow-Headers": pulumi.String("'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"),
+					"method.response.header.Access-Control-Allow-Methods": pulumi.String("'GET,POST,PUT,DELETE,OPTIONS'"),
+					"method.response.header.Access-Control-Allow-Origin":  pulumi.String("'*'"),
+				},
+			}, pulumi.DependsOn([]pulumi.Resource{optionsIntegration, optionsMethodResponse}))
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
 		// Helper function to create API Gateway resources and methods
 		createAPIRoute := func(pathPart string, parentID pulumi.IDOutput, method string, lambdaFn *lambda.Function, routeName string) error {
 			// Create resource
@@ -735,6 +801,12 @@ func main() {
 				ParentId: parentID,
 				PathPart: pulumi.String(pathPart),
 			})
+			if err != nil {
+				return err
+			}
+
+			// Add OPTIONS method for CORS
+			err = addOptionsMethod(resource.ID(), routeName)
 			if err != nil {
 				return err
 			}
@@ -751,7 +823,7 @@ func main() {
 			}
 
 			// Create integration
-			_, err = apigateway.NewIntegration(ctx, routeName+"-integration", &apigateway.IntegrationArgs{
+			integration, err := apigateway.NewIntegration(ctx, routeName+"-integration", &apigateway.IntegrationArgs{
 				RestApi:               api.ID(),
 				ResourceId:            resource.ID(),
 				HttpMethod:            pulumi.String(method),
@@ -762,6 +834,7 @@ func main() {
 			if err != nil {
 				return err
 			}
+			allIntegrations = append(allIntegrations, integration)
 
 			// Grant API Gateway permission to invoke Lambda
 			_, err = lambda.NewPermission(ctx, routeName+"-permission", &lambda.PermissionArgs{
@@ -825,6 +898,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /channels
+		err = addOptionsMethod(channelsResource.ID(), "channels-list")
+		if err != nil {
+			return err
+		}
+
 		// GET /channels (requires user authentication)
 		_, err = apigateway.NewMethod(ctx, "channels-list-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
@@ -837,7 +916,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "channels-list-integration", &apigateway.IntegrationArgs{
+		channelsListIntegration, err := apigateway.NewIntegration(ctx, "channels-list-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            channelsResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -848,6 +927,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, channelsListIntegration)
 
 		_, err = lambda.NewPermission(ctx, "channels-list-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -869,6 +949,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /channels/{id}
+		err = addOptionsMethod(channelIDResource.ID(), "channel-get")
+		if err != nil {
+			return err
+		}
+
 		// GET /channels/{id} (requires user authentication)
 		_, err = apigateway.NewMethod(ctx, "channel-get-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
@@ -881,7 +967,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "channel-get-integration", &apigateway.IntegrationArgs{
+		channelGetIntegration, err := apigateway.NewIntegration(ctx, "channel-get-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            channelIDResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -892,6 +978,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, channelGetIntegration)
 
 		_, err = lambda.NewPermission(ctx, "channel-get-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -913,6 +1000,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /channels/{id}/ask
+		err = addOptionsMethod(askResource.ID(), "channel-ask")
+		if err != nil {
+			return err
+		}
+
 		_, err = apigateway.NewMethod(ctx, "channel-ask-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    askResource.ID(),
@@ -924,7 +1017,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "channel-ask-integration", &apigateway.IntegrationArgs{
+		channelAskIntegration, err := apigateway.NewIntegration(ctx, "channel-ask-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            askResource.ID(),
 			HttpMethod:            pulumi.String("POST"),
@@ -935,6 +1028,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, channelAskIntegration)
 
 		_, err = lambda.NewPermission(ctx, "channel-ask-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -956,6 +1050,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /channels/{id}/messages
+		err = addOptionsMethod(messagesResource.ID(), "channel-messages")
+		if err != nil {
+			return err
+		}
+
 		_, err = apigateway.NewMethod(ctx, "channel-messages-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    messagesResource.ID(),
@@ -967,7 +1067,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "channel-messages-integration", &apigateway.IntegrationArgs{
+		channelMessagesIntegration, err := apigateway.NewIntegration(ctx, "channel-messages-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            messagesResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -978,6 +1078,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, channelMessagesIntegration)
 
 		_, err = lambda.NewPermission(ctx, "channel-messages-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1017,6 +1118,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /admin/channels/{id}/transcriptions
+		err = addOptionsMethod(adminTranscriptionsResource.ID(), "admin-upload")
+		if err != nil {
+			return err
+		}
+
 		// POST /admin/channels/{id}/transcriptions (requires admin authentication)
 		_, err = apigateway.NewMethod(ctx, "admin-upload-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
@@ -1029,7 +1136,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "admin-upload-integration", &apigateway.IntegrationArgs{
+		adminUploadIntegration, err := apigateway.NewIntegration(ctx, "admin-upload-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            adminTranscriptionsResource.ID(),
 			HttpMethod:            pulumi.String("POST"),
@@ -1040,6 +1147,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, adminUploadIntegration)
 
 		_, err = lambda.NewPermission(ctx, "admin-upload-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1061,6 +1169,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /admin/stats
+		err = addOptionsMethod(statsResource.ID(), "admin-stats")
+		if err != nil {
+			return err
+		}
+
 		_, err = apigateway.NewMethod(ctx, "admin-stats-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    statsResource.ID(),
@@ -1072,7 +1186,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "admin-stats-integration", &apigateway.IntegrationArgs{
+		adminStatsIntegration, err := apigateway.NewIntegration(ctx, "admin-stats-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            statsResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -1083,6 +1197,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, adminStatsIntegration)
 
 		_, err = lambda.NewPermission(ctx, "admin-stats-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1090,6 +1205,12 @@ func main() {
 			Principal: pulumi.String("apigateway.amazonaws.com"),
 			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
 		})
+		if err != nil {
+			return err
+		}
+
+		// Add OPTIONS to /admin/channels
+		err = addOptionsMethod(adminChannelsResource.ID(), "admin-channels-list")
 		if err != nil {
 			return err
 		}
@@ -1106,7 +1227,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "admin-channels-list-integration", &apigateway.IntegrationArgs{
+		adminChannelsListIntegration, err := apigateway.NewIntegration(ctx, "admin-channels-list-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            adminChannelsResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -1117,6 +1238,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, adminChannelsListIntegration)
 
 		_, err = lambda.NewPermission(ctx, "admin-channels-list-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1124,6 +1246,12 @@ func main() {
 			Principal: pulumi.String("apigateway.amazonaws.com"),
 			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
 		})
+		if err != nil {
+			return err
+		}
+
+		// Add OPTIONS to /admin/channels/{id}
+		err = addOptionsMethod(adminChannelIDResource.ID(), "admin-channel-get")
 		if err != nil {
 			return err
 		}
@@ -1140,7 +1268,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "admin-channel-get-integration", &apigateway.IntegrationArgs{
+		adminChannelGetIntegration, err := apigateway.NewIntegration(ctx, "admin-channel-get-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            adminChannelIDResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -1151,6 +1279,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, adminChannelGetIntegration)
 
 		_, err = lambda.NewPermission(ctx, "admin-channel-get-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1161,6 +1290,9 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		// Add OPTIONS to /admin/channels/{id}/transcriptions (already added above for POST)
+		// Skip adding OPTIONS again since it was added for POST method above
 
 		// GET /admin/channels/{id}/transcriptions
 		_, err = apigateway.NewMethod(ctx, "admin-list-transcriptions-method", &apigateway.MethodArgs{
@@ -1174,7 +1306,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "admin-list-transcriptions-integration", &apigateway.IntegrationArgs{
+		adminListTranscriptionsIntegration, err := apigateway.NewIntegration(ctx, "admin-list-transcriptions-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            adminTranscriptionsResource.ID(),
 			HttpMethod:            pulumi.String("GET"),
@@ -1185,6 +1317,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, adminListTranscriptionsIntegration)
 
 		_, err = lambda.NewPermission(ctx, "admin-list-transcriptions-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1206,6 +1339,12 @@ func main() {
 			return err
 		}
 
+		// Add OPTIONS to /admin/channels/{id}/transcriptions/{transcriptionId}
+		err = addOptionsMethod(adminTranscriptionIDResource.ID(), "admin-delete-transcription")
+		if err != nil {
+			return err
+		}
+
 		_, err = apigateway.NewMethod(ctx, "admin-delete-transcription-method", &apigateway.MethodArgs{
 			RestApi:       api.ID(),
 			ResourceId:    adminTranscriptionIDResource.ID(),
@@ -1217,7 +1356,7 @@ func main() {
 			return err
 		}
 
-		_, err = apigateway.NewIntegration(ctx, "admin-delete-transcription-integration", &apigateway.IntegrationArgs{
+		adminDeleteTranscriptionIntegration, err := apigateway.NewIntegration(ctx, "admin-delete-transcription-integration", &apigateway.IntegrationArgs{
 			RestApi:               api.ID(),
 			ResourceId:            adminTranscriptionIDResource.ID(),
 			HttpMethod:            pulumi.String("DELETE"),
@@ -1228,6 +1367,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+		allIntegrations = append(allIntegrations, adminDeleteTranscriptionIntegration)
 
 		_, err = lambda.NewPermission(ctx, "admin-delete-transcription-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
@@ -1244,21 +1384,9 @@ func main() {
 			RestApi: api.ID(),
 			// Force new deployment on every update
 			Triggers: pulumi.StringMap{
-				"redeployment": pulumi.Sprintf("%v", "2"),
+				"redeployment": pulumi.Sprintf("%v", "3"),
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{
-			registerUserLambda,
-			loginUserLambda,
-			loginAdminLambda,
-			listChannelsLambda,
-			getChannelLambda,
-			uploadTranscriptionLambda,
-			sendMessageLambda,
-			getMessagesLambda,
-			adminStatsLambda,
-			listTranscriptionsLambda,
-			deleteTranscriptionLambda,
-		}))
+		}, pulumi.DependsOn(allIntegrations))
 		if err != nil {
 			return err
 		}

@@ -60,7 +60,7 @@ export interface AdminLoginResponse {
 }
 
 export const adminLogin = async (credentials: AdminLoginRequest): Promise<AdminLoginResponse> => {
-  const response = await fetch(`${API_URL}/api/admin/auth/login`, {
+  const response = await fetch(`${API_URL}/admin/login`, {
     method: 'POST',
     headers: createHeaders(false),
     body: JSON.stringify(credentials),
@@ -78,13 +78,15 @@ export interface DashboardStats {
 }
 
 export const getDashboardStats = async (): Promise<DashboardStats> => {
-  const response = await fetch(`${API_URL}/api/admin/stats`, {
+  const response = await fetch(`${API_URL}/admin/stats`, {
     headers: createHeaders(),
   });
   return handleResponse(response);
 };
 
 // ==================== Activity ====================
+// Note: Activity endpoint not yet implemented in backend
+// Keeping types for future implementation
 
 export interface Activity {
   id: string;
@@ -97,11 +99,9 @@ export interface ActivityResponse {
   activities: Activity[];
 }
 
+// Placeholder - returns empty activities until backend endpoint is implemented
 export const getRecentActivity = async (): Promise<ActivityResponse> => {
-  const response = await fetch(`${API_URL}/api/admin/activity`, {
-    headers: createHeaders(),
-  });
-  return handleResponse(response);
+  return { activities: [] };
 };
 
 // ==================== Channels ====================
@@ -122,7 +122,7 @@ export interface ChannelsResponse {
 }
 
 export const getChannels = async (): Promise<ChannelsResponse> => {
-  const response = await fetch(`${API_URL}/api/admin/channels`, {
+  const response = await fetch(`${API_URL}/admin/channels`, {
     headers: createHeaders(),
   });
   return handleResponse(response);
@@ -133,7 +133,7 @@ export interface ChannelResponse {
 }
 
 export const getChannel = async (channelId: string): Promise<ChannelResponse> => {
-  const response = await fetch(`${API_URL}/api/admin/channels/${channelId}`, {
+  const response = await fetch(`${API_URL}/admin/channels/${channelId}`, {
     headers: createHeaders(),
   });
   return handleResponse(response);
@@ -155,7 +155,7 @@ export interface TranscriptionsResponse {
 }
 
 export const getTranscriptions = async (channelId: string): Promise<TranscriptionsResponse> => {
-  const response = await fetch(`${API_URL}/api/admin/channels/${channelId}/transcriptions`, {
+  const response = await fetch(`${API_URL}/admin/channels/${channelId}/transcriptions`, {
     headers: createHeaders(),
   });
   return handleResponse(response);
@@ -218,7 +218,7 @@ export const uploadTranscription = async (
 
     // Send request
     const token = getAuthToken();
-    xhr.open('POST', `${API_URL}/api/admin/channels/${channelId}/transcriptions`);
+    xhr.open('POST', `${API_URL}/admin/channels/${channelId}/transcriptions`);
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
@@ -231,7 +231,7 @@ export const deleteTranscription = async (
   transcriptionId: string
 ): Promise<{ message: string }> => {
   const response = await fetch(
-    `${API_URL}/api/admin/channels/${channelId}/transcriptions/${transcriptionId}`,
+    `${API_URL}/admin/channels/${channelId}/transcriptions/${transcriptionId}`,
     {
       method: 'DELETE',
       headers: createHeaders(),
@@ -251,7 +251,7 @@ export const downloadTranscription = async (
   }
 
   const response = await fetch(
-    `${API_URL}/api/admin/channels/${channelId}/transcriptions/${transcriptionId}/download`,
+    `${API_URL}/admin/channels/${channelId}/transcriptions/${transcriptionId}/download`,
     {
       headers,
     }

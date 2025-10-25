@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
 	"askly/backend/shared/logger"
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
+	"askly/backend/shared/response"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -34,6 +34,11 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -45,7 +50,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	claims, ok := request.RequestContext.Authorizer["claims"].(map[string]interface{})
 	if !ok || claims == nil {
 		log.Error().Msg("No Cognito claims found in request context")
-		return response(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return response.Error(http.StatusUnauthorized, "Unauthorized")
 	}
 
 	userID, _ := claims["sub"].(string)
@@ -62,7 +67,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	channelRepo, err := repository.NewChannelRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize channel repository")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+		return response.Error(http.StatusInternalServerError, "Internal server error")
 	}
 
 	// Get all channels
@@ -70,7 +75,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	var channels []*models.Channel
 	if err := channelRepo.ListChannels(ctx, &channels); err != nil {
 		log.Error().Err(err).Msg("Failed to fetch channels")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to fetch channels"})
+		return response.Error(http.StatusInternalServerError, "Failed to fetch channels")
 	}
 
 	log.Info().Int("channel_count", len(channels)).Msg("Channels retrieved successfully")
@@ -97,21 +102,9 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Dur("duration_ms", duration).
 		Msg("List channels request completed")
 
-	return response(http.StatusOK, ListChannelsResponse{
+	return response.JSON(http.StatusOK, ListChannelsResponse{
 		Channels: channelResponses,
 	})
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
 }
 
 func main() {

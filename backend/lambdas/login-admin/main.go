@@ -9,6 +9,7 @@ import (
 
 	"askly/backend/shared/auth"
 	"askly/backend/shared/logger"
+	"askly/backend/shared/response"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -33,6 +34,11 @@ type ErrorResponse struct {
 }
 
 func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	// Handle OPTIONS preflight request
+	if request.HTTPMethod == "OPTIONS" {
+		return response.Options()
+	}
+
 	// Initialize logger with request context
 	ctx = logger.NewContextFromAPIGatewayRequest(ctx, request)
 	log := logger.FromContext(ctx)
@@ -44,13 +50,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	var req LoginRequest
 	if err := json.Unmarshal([]byte(request.Body), &req); err != nil {
 		log.Error().Err(err).Msg("Failed to parse request body")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Invalid request body"})
+		return response.Error(http.StatusBadRequest, "Invalid request body")
 	}
 
 	// Validate input
 	if req.Email == "" || req.Password == "" {
 		log.Warn().Str("email", req.Email).Msg("Missing required fields")
-		return response(http.StatusBadRequest, ErrorResponse{Error: "Email and password are required"})
+		return response.Error(http.StatusBadRequest, "Email and password are required")
 	}
 
 	log.Debug().Str("email", req.Email).Msg("Attempting admin authentication")
@@ -59,7 +65,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	cognitoClient, err := auth.NewCognitoClient(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize Cognito client")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Internal server error"})
+		return response.Error(http.StatusInternalServerError, "Internal server error")
 	}
 
 	// Authenticate admin with Cognito
@@ -74,12 +80,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 			Msg("Admin authentication failed")
 
 		if strings.Contains(errMsg, "NotAuthorizedException") || strings.Contains(errMsg, "UserNotFoundException") {
-			return response(http.StatusUnauthorized, ErrorResponse{Error: "Invalid email or password"})
+			return response.Error(http.StatusUnauthorized, "Invalid email or password")
 		}
 		if strings.Contains(errMsg, "UserNotConfirmedException") {
-			return response(http.StatusForbidden, ErrorResponse{Error: "Admin email not confirmed"})
+			return response.Error(http.StatusForbidden, "Admin email not confirmed")
 		}
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Authentication failed"})
+		return response.Error(http.StatusInternalServerError, "Authentication failed")
 	}
 
 	log.Debug().Str("email", req.Email).Msg("Cognito authentication successful")
@@ -88,7 +94,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	cognitoUser, err := cognitoClient.GetUserFromToken(ctx, authResult.AccessToken)
 	if err != nil {
 		log.Error().Err(err).Str("email", req.Email).Msg("Failed to retrieve admin info from Cognito")
-		return response(http.StatusInternalServerError, ErrorResponse{Error: "Failed to get admin information"})
+		return response.Error(http.StatusInternalServerError, "Failed to get admin information")
 	}
 
 	// Log successful login
@@ -100,7 +106,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Msg("Admin login successful")
 
 	// Return success response with Cognito tokens
-	return response(http.StatusOK, LoginResponse{
+	return response.JSON(http.StatusOK, LoginResponse{
 		Message:      "Admin login successful",
 		AdminID:      cognitoUser.Sub,
 		AccessToken:  authResult.AccessToken,
@@ -122,18 +128,6 @@ func getErrorType(errMsg string) string {
 		return "UserNotConfirmedException"
 	}
 	return "UnknownError"
-}
-
-func response(statusCode int, body interface{}) (events.APIGatewayProxyResponse, error) {
-	jsonBody, _ := json.Marshal(body)
-	return events.APIGatewayProxyResponse{
-		StatusCode: statusCode,
-		Headers: map[string]string{
-			"Content-Type":                "application/json",
-			"Access-Control-Allow-Origin": "*",
-		},
-		Body: string(jsonBody),
-	}, nil
 }
 
 func main() {
