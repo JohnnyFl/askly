@@ -436,6 +436,15 @@ func main() {
 					{
 						"Effect": "Allow",
 						"Action": [
+							"aws-marketplace:ViewSubscriptions",
+							"aws-marketplace:Subscribe",
+							"aws-marketplace:Unsubscribe"
+						],
+						"Resource": "*"
+					},
+					{
+						"Effect": "Allow",
+						"Action": [
 							"cognito-idp:AdminInitiateAuth",
 							"cognito-idp:AdminCreateUser",
 							"cognito-idp:AdminSetUserPassword",

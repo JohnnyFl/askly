@@ -17,14 +17,16 @@ import (
 )
 
 type SendMessageRequest struct {
-	Question string `json:"question"`
+	Question    string `json:"question"`
+	PromptStyle string `json:"prompt_style,omitempty"` // optional: educational, direct, mentor, excited, gojo
 }
 
 type SendMessageResponse struct {
-	MessageID string                 `json:"message_id"`
-	Question  string                 `json:"question"`
-	Answer    string                 `json:"answer"`
-	Sources   []models.MessageSource `json:"sources"`
+	MessageID   string                 `json:"message_id"`
+	Question    string                 `json:"question"`
+	Answer      string                 `json:"answer"`
+	Sources     []models.MessageSource `json:"sources"`
+	PromptStyle string                 `json:"prompt_style"` // returns the style used
 }
 
 type ErrorResponse struct {
@@ -82,9 +84,28 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusBadRequest, ErrorResponse{Error: "question is required"})
 	}
 
+	// Determine prompt style (default to "direct")
+	promptStyle := services.PromptStyle(req.PromptStyle)
+	if req.PromptStyle == "" {
+		promptStyle = services.PromptStyleDirect
+	}
+	// Validate prompt style
+	validStyles := map[services.PromptStyle]bool{
+		services.PromptStyleEducational: true,
+		services.PromptStyleDirect:      true,
+		services.PromptStyleMentor:      true,
+		services.PromptStyleExcited:     true,
+		services.PromptStyleGojo:        true,
+	}
+	if !validStyles[promptStyle] {
+		log.Warn().Str("invalid_style", req.PromptStyle).Msg("Invalid prompt style, using default")
+		promptStyle = services.PromptStyleDirect
+	}
+
 	log.Info().
 		Str("question_preview", truncate(req.Question, 100)).
 		Int("question_length", len(req.Question)).
+		Str("prompt_style", string(promptStyle)).
 		Msg("Processing user question")
 
 	// Initialize repositories
@@ -223,10 +244,13 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to initialize AI service: %v", err)})
 	}
 
-	// Generate answer using Claude with RAG
+	// Generate answer using Claude with RAG and selected prompt style
 	generateStart := time.Now()
-	log.Info().Int("context_chunk_count", len(contextChunks)).Msg("Calling Bedrock to generate answer")
-	answer, err := bedrockService.GenerateAnswer(ctx, req.Question, contextChunks)
+	log.Info().
+		Int("context_chunk_count", len(contextChunks)).
+		Str("prompt_style", string(promptStyle)).
+		Msg("Calling Bedrock to generate answer")
+	answer, err := bedrockService.GenerateAnswerWithStyle(ctx, req.Question, contextChunks, promptStyle)
 	if err != nil {
 		log.Error().Err(err).Msg("Bedrock GenerateAnswer failed")
 		return response(http.StatusInternalServerError, ErrorResponse{Error: fmt.Sprintf("Failed to generate answer: %v", err)})
@@ -261,10 +285,11 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		Msg("Send message request completed successfully")
 
 	return response(http.StatusOK, SendMessageResponse{
-		MessageID: message.GetID(),
-		Question:  message.Question,
-		Answer:    message.Answer,
-		Sources:   message.Sources,
+		MessageID:   message.GetID(),
+		Question:    message.Question,
+		Answer:      message.Answer,
+		Sources:     message.Sources,
+		PromptStyle: string(promptStyle),
 	})
 }
 
