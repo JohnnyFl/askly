@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Video, FileText, Loader2, Upload as UploadIcon } from 'lucide-react';
-import { FileUpload } from '@/components/admin/FileUpload';
+import  FileUpload  from '@/components/admin/FileUpload';
 import { TranscriptionList, Transcription } from '@/components/admin/TranscriptionList';
 import { FadeInWhenVisible } from '@/components/animations/FadeInWhenVisible';
 import { useToast } from '@/hooks/use-toast';
@@ -105,6 +105,14 @@ export default function AdminChannelUploadPage() {
       description: 'Transcription uploaded successfully',
     });
     fetchTranscriptions();
+  };
+
+  const handleUploadError = (error: Error) => {
+    toast({
+      title: 'Upload Failed',
+      description: error.message || 'Failed to upload transcription',
+      variant: 'destructive',
+    });
   };
 
   const handleDelete = async (transcriptionId: string) => {
@@ -267,7 +275,14 @@ export default function AdminChannelUploadPage() {
             </div>
             <h2 className="text-2xl font-bold text-slate-900">Upload New Content</h2>
           </div>
-          <FileUpload channelId={channelId} onUploadComplete={handleUploadComplete} />
+          <FileUpload
+            endpoint={`${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions`}
+            channelId={channelId}
+            onUploadComplete={handleUploadComplete}
+            onUploadError={handleUploadError}
+            authTokenKey="admin_auth_token"
+            allowedFileTypes={['.json', '.txt', '.csv', '.pdf', '.vtt', '.srt']}
+          />
         </div>
       </FadeInWhenVisible>
 
