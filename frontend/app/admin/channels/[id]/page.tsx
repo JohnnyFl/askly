@@ -16,9 +16,9 @@ type Channel = {
   id: string;
   name: string;
   description: string;
-  avatar_url: string;
+  thumbnail_url: string;
   youtube_url: string;
-  created_at: string;
+  youtube_channel_id: string;
   transcription_count?: number;
 };
 
@@ -56,7 +56,8 @@ export default function AdminChannelUploadPage() {
       }
 
       const data = await response.json();
-      setChannel(data.channel);
+      // Backend returns channel directly, not wrapped in { channel: ... }
+      setChannel(data);
       setError(null);
     } catch (error) {
       console.error('Error fetching channel:', error);
@@ -272,7 +273,7 @@ export default function AdminChannelUploadPage() {
           <div className="relative z-10">
             <div className="flex items-start gap-6">
               <Avatar className="h-24 w-24 ring-4 ring-purple-200 shadow-lg">
-                <AvatarImage src={channel.avatar_url} alt={channel.name} />
+                <AvatarImage src={channel.thumbnail_url} alt={channel.name} />
                 <AvatarFallback className="bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] text-white text-3xl font-bold">
                   {channel.name.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -301,9 +302,6 @@ export default function AdminChannelUploadPage() {
                   <Badge className="bg-gradient-to-r from-[#6D28D9] to-[#5B21B6] gap-1">
                     <FileText className="h-3 w-3" />
                     {channel.transcription_count || 0} Transcriptions
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    Added {new Date(channel.created_at).toLocaleDateString()}
                   </Badge>
                 </div>
               </div>
