@@ -44,20 +44,37 @@ export default function AdminChannelUploadPage() {
   const fetchChannel = async () => {
     try {
       const token = localStorage.getItem('admin_auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      const fullUrl = `${apiUrl}/admin/channels/${channelId}`;
+
+      console.log('🔍 DEBUG: API URL:', apiUrl);
+      console.log('🔍 DEBUG: Full request URL:', fullUrl);
+      console.log('🔍 DEBUG: Channel ID:', channelId);
+      console.log('🔍 DEBUG: Has auth token:', !!token);
+
+      const response = await fetch(fullUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
+      console.log('🔍 DEBUG: Response status:', response.status);
+      console.log('🔍 DEBUG: Response ok:', response.ok);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.log('🔍 DEBUG: Error response text:', errorText);
         throw new Error(errorText || 'Failed to fetch channel');
       }
 
       const data = await response.json();
+      console.log('🔍 DEBUG: Response data:', JSON.stringify(data, null, 2));
+      console.log('🔍 DEBUG: Data type:', typeof data);
+      console.log('🔍 DEBUG: Data keys:', Object.keys(data || {}));
+
       // Backend returns channel directly, not wrapped in { channel: ... }
       setChannel(data);
+      console.log('🔍 DEBUG: Channel state set successfully');
       setError(null);
     } catch (error) {
       console.error('Error fetching channel:', error);
