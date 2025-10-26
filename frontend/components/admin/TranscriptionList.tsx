@@ -71,7 +71,7 @@ export function TranscriptionList({
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const filteredTranscriptions = transcriptions.filter((t) =>
-    t.file_name.toLowerCase().includes(searchQuery.toLowerCase())
+    t.file_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const formatFileSize = (bytes: number): string => {
