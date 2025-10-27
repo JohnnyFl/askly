@@ -688,6 +688,26 @@ func main() {
 		if err != nil {
 			return err
 		}
+
+		// Lambda: get-transcription
+		getTranscriptionLambda, err := lambda.NewFunction(ctx, "get-transcription", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-get-transcription"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/get-transcription"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-get-transcription"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
 		// ===== API Gateway =====
 		// Create REST API
 		api, err := apigateway.NewRestApi(ctx, "askly-api", &apigateway.RestApiArgs{
@@ -1372,6 +1392,41 @@ func main() {
 		_, err = lambda.NewPermission(ctx, "admin-delete-transcription-permission", &lambda.PermissionArgs{
 			Action:    pulumi.String("lambda:InvokeFunction"),
 			Function:  deleteTranscriptionLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /admin/channels/{id}/transcriptions/{transcriptionId}
+		_, err = apigateway.NewMethod(ctx, "admin-get-transcription-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminTranscriptionIDResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		adminGetTranscriptionIntegration, err := apigateway.NewIntegration(ctx, "admin-get-transcription-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminTranscriptionIDResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   getTranscriptionLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+		allIntegrations = append(allIntegrations, adminGetTranscriptionIntegration)
+
+		_, err = lambda.NewPermission(ctx, "admin-get-transcription-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  getTranscriptionLambda.Name,
 			Principal: pulumi.String("apigateway.amazonaws.com"),
 			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
 		})

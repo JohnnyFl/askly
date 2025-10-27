@@ -47,7 +47,7 @@ export function AddTranscriptionForm({
           body: JSON.stringify({
             video_title: videoTitle,
             video_url: videoUrl,
-            transcription_text: transcriptionText,
+            transcription: transcriptionText,
           }),
         }
       );
