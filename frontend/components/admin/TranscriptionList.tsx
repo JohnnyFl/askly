@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Eye,
 } from 'lucide-react';
 
 export type Transcription = {
@@ -56,6 +57,7 @@ type TranscriptionListProps = {
   loading: boolean;
   onDelete?: (transcriptionId: string) => Promise<void>;
   onDownload?: (transcriptionId: string) => Promise<void>;
+  onView?: (transcriptionId: string) => void;
 };
 
 export function TranscriptionList({
@@ -64,6 +66,7 @@ export function TranscriptionList({
   loading,
   onDelete,
   onDownload,
+  onView,
 }: TranscriptionListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -244,6 +247,14 @@ export function TranscriptionList({
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="rounded-xl">
+                            <DropdownMenuItem
+                              onClick={() => onView?.(transcription.id)}
+                              disabled={transcription.status !== 'completed'}
+                              className="gap-2 cursor-pointer rounded-lg"
+                            >
+                              <Eye className="h-4 w-4" />
+                              View Full Text
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleDownload(transcription.id)}
                               disabled={

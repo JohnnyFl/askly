@@ -6,11 +6,19 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Video, FileText, Loader2, Upload as UploadIcon, AlertCircle } from 'lucide-react';
-import  FileUpload  from '@/components/admin/FileUpload';
+import { ArrowLeft, Video, FileText, Loader2, Upload as UploadIcon, AlertCircle, X } from 'lucide-react';
+import { AddTranscriptionForm } from '@/components/admin/AddTranscriptionForm';
 import { TranscriptionList, Transcription } from '@/components/admin/TranscriptionList';
 import { FadeInWhenVisible } from '@/components/animations/FadeInWhenVisible';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type Channel = {
   id: string;
@@ -33,6 +41,9 @@ export default function AdminChannelUploadPage() {
   const [loading, setLoading] = useState(true);
   const [transcriptionsLoading, setTranscriptionsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewingTranscriptionId, setViewingTranscriptionId] = useState<string | null>(null);
+  const [transcriptionFullText, setTranscriptionFullText] = useState<string>('');
+  const [loadingFullText, setLoadingFullText] = useState(false);
 
   useEffect(() => {
     if (channelId) {
@@ -94,21 +105,32 @@ export default function AdminChannelUploadPage() {
     setTranscriptionsLoading(true);
     try {
       const token = localStorage.getItem('admin_auth_token');
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
+      const transcriptionsUrl = `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions`;
+
+      console.log('📝 DEBUG: Fetching transcriptions from:', transcriptionsUrl);
+
+      const response = await fetch(transcriptionsUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      console.log('📝 DEBUG: Transcriptions response status:', response.status);
+      console.log('📝 DEBUG: Transcriptions response ok:', response.ok);
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.log('📝 DEBUG: Transcriptions error response:', errorText);
         throw new Error('Failed to fetch transcriptions');
       }
 
       const data = await response.json();
+      console.log('📝 DEBUG: Transcriptions response data:', JSON.stringify(data, null, 2));
+      console.log('📝 DEBUG: Transcriptions array:', data.transcriptions);
+      console.log('📝 DEBUG: Transcriptions count:', data.transcriptions?.length || 0);
+
       setTranscriptions(data.transcriptions || []);
+      console.log('📝 DEBUG: Transcriptions state updated');
     } catch (error) {
       console.error('Error fetching transcriptions:', error);
       toast({
@@ -121,18 +143,18 @@ export default function AdminChannelUploadPage() {
     }
   };
 
-  const handleUploadComplete = () => {
+  const handleAddSuccess = () => {
     toast({
       title: 'Success',
-      description: 'Transcription uploaded successfully',
+      description: 'Transcription added successfully',
     });
     fetchTranscriptions();
   };
 
-  const handleUploadError = (error: Error) => {
+  const handleAddError = (error: Error) => {
     toast({
-      title: 'Upload Failed',
-      description: error.message || 'Failed to upload transcription',
+      title: 'Error',
+      description: error.message || 'Failed to add transcription',
       variant: 'destructive',
     });
   };
@@ -167,6 +189,41 @@ export default function AdminChannelUploadPage() {
         variant: 'destructive',
       });
       throw error;
+    }
+  };
+
+  const handleView = async (transcriptionId: string) => {
+    setViewingTranscriptionId(transcriptionId);
+    setLoadingFullText(true);
+    setTranscriptionFullText('');
+
+    try {
+      const token = localStorage.getItem('admin_auth_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions/${transcriptionId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch transcription');
+      }
+
+      const data = await response.json();
+      setTranscriptionFullText(data.full_text || data.transcription_text || 'No transcription text available');
+    } catch (error) {
+      console.error('Error fetching transcription:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load full transcription',
+        variant: 'destructive',
+      });
+      setViewingTranscriptionId(null);
+    } finally {
+      setLoadingFullText(false);
     }
   };
 
@@ -327,24 +384,13 @@ export default function AdminChannelUploadPage() {
         </Card>
       </FadeInWhenVisible>
 
-      {/* File Upload Section */}
+      {/* Add Transcription Form */}
       <FadeInWhenVisible delay={200}>
-        <div>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-10 w-10 bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] rounded-xl flex items-center justify-center shadow-lg">
-              <UploadIcon className="h-5 w-5 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900">Upload New Content</h2>
-          </div>
-          <FileUpload
-            endpoint={`${process.env.NEXT_PUBLIC_API_URL}/admin/channels/${channelId}/transcriptions`}
-            channelId={channelId}
-            onUploadComplete={handleUploadComplete}
-            onUploadError={handleUploadError}
-            authTokenKey="admin_auth_token"
-            allowedFileTypes={['.json', '.txt', '.csv', '.pdf', '.vtt', '.srt']}
-          />
-        </div>
+        <AddTranscriptionForm
+          channelId={channelId}
+          onSuccess={handleAddSuccess}
+          onError={handleAddError}
+        />
       </FadeInWhenVisible>
 
       {/* Transcriptions List */}
@@ -355,8 +401,33 @@ export default function AdminChannelUploadPage() {
           loading={transcriptionsLoading}
           onDelete={handleDelete}
           onDownload={handleDownload}
+          onView={handleView}
         />
       </FadeInWhenVisible>
+
+      {/* View Transcription Dialog */}
+      <Dialog open={!!viewingTranscriptionId} onOpenChange={(open) => !open && setViewingTranscriptionId(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Full Transcription</DialogTitle>
+            <DialogDescription>
+              View the complete transcription text
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingFullText ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-[#6D28D9]" />
+            </div>
+          ) : (
+            <ScrollArea className="h-[60vh] rounded-xl border border-purple-100 p-6">
+              <div className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
+                {transcriptionFullText}
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

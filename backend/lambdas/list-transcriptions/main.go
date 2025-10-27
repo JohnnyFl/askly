@@ -19,11 +19,14 @@ type TranscriptionsResponse struct {
 }
 
 type TranscriptionResponse struct {
-	ID         string `json:"id"`
-	VideoTitle string `json:"video_title"`
-	VideoURL   string `json:"video_url"`
-	UploadDate string `json:"upload_date"`
-	Status     string `json:"status"`
+	ID           string `json:"id"`
+	FileName     string `json:"file_name"`
+	FileSize     int    `json:"file_size"`
+	VideoTitle   string `json:"video_title"`
+	VideoURL     string `json:"video_url"`
+	UploadDate   string `json:"upload_date"`
+	Status       string `json:"status"`
+	ErrorMessage string `json:"error_message,omitempty"`
 }
 
 type ErrorResponse struct {
@@ -94,8 +97,17 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Debug().Msg("Converting transcriptions to response format")
 	transcriptionResponses := make([]TranscriptionResponse, len(transcriptions))
 	for i, transcription := range transcriptions {
+		// Use video title as file name, calculate approximate file size from full text
+		fileName := transcription.VideoTitle
+		if fileName == "" {
+			fileName = "Untitled"
+		}
+		fileSize := len(transcription.FullText)
+
 		transcriptionResponses[i] = TranscriptionResponse{
 			ID:         transcription.PK,
+			FileName:   fileName,
+			FileSize:   fileSize,
 			VideoTitle: transcription.VideoTitle,
 			VideoURL:   transcription.VideoURL,
 			UploadDate: transcription.UploadedAt.Format("2006-01-02T15:04:05Z07:00"),
