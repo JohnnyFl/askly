@@ -15,8 +15,9 @@ type Channel = {
   id: string;
   name: string;
   description: string;
-  avatar_url: string;
+  thumbnail_url: string;
   youtube_url: string;
+  youtube_channel_id: string;
   created_at: string;
 };
 
@@ -202,7 +203,7 @@ export default function ChannelsPage() {
                       <CardHeader className="p-6 relative z-10">
                         <div className="flex items-start gap-4 mb-4">
                           <Avatar className="h-20 w-20 ring-4 ring-pink-100 group-hover:ring-[#FB7185]/30 group-hover:scale-110 transition-all duration-300">
-                            <AvatarImage src={channel.avatar_url} alt={channel.name} />
+                            <AvatarImage src={channel.thumbnail_url} alt={channel.name} />
                             <AvatarFallback className="bg-gradient-to-br from-[#FB7185] to-[#EF4444] text-white text-2xl font-bold">
                               {channel.name.substring(0, 2).toUpperCase()}
                             </AvatarFallback>

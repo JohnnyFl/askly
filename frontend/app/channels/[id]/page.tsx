@@ -15,8 +15,9 @@ type Channel = {
   id: string;
   name: string;
   description: string;
-  avatar_url: string;
+  thumbnail_url: string;
   youtube_url: string;
+  youtube_channel_id: string;
   created_at: string;
 };
 
@@ -24,11 +25,10 @@ type Question = {
   id: string;
   channel_id: string;
   user_id: string;
-  question_text: string;
-  answer_text: string;
+  question: string;  // Backend returns 'question' not 'question_text'
+  answer: string;     // Backend returns 'answer' not 'answer_text'
+  sources?: any[];
   created_at: string;
-  is_faq: boolean;
-  faq_order: number;
 };
 
 export default function ChannelChatPage() {
@@ -68,11 +68,12 @@ export default function ChannelChatPage() {
       if (!response.ok) throw new Error('Failed to fetch channel');
 
       const data = await response.json();
-      if (!data.channel) {
+      // Backend returns channel directly, not wrapped
+      if (!data.id) {
         router.push('/channels');
         return;
       }
-      setChannel(data.channel);
+      setChannel(data);
     } catch (error) {
       console.error('Error fetching channel:', error);
       router.push('/channels');
@@ -93,7 +94,8 @@ export default function ChannelChatPage() {
       if (!response.ok) throw new Error('Failed to fetch FAQs');
 
       const data = await response.json();
-      setFaqs(data.faqs || []);
+      // Backend returns messages array
+      setFaqs(data.messages || []);
     } catch (error) {
       console.error('Error fetching FAQs:', error);
     }
@@ -170,7 +172,7 @@ export default function ChannelChatPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <Avatar className="h-14 w-14 shrink-0 ring-4 ring-pink-100">
-                <AvatarImage src={channel.avatar_url} alt={channel.name} />
+                <AvatarImage src={channel.thumbnail_url} alt={channel.name} />
                 <AvatarFallback className="bg-gradient-to-br from-[#FB7185] to-[#EF4444] text-white font-bold text-lg">
                   {channel.name.substring(0, 2).toUpperCase()}
                 </AvatarFallback>
@@ -279,11 +281,11 @@ export default function ChannelChatPage() {
                                   })}
                                 </p>
                               </div>
-                              <p className="text-slate-900 leading-relaxed">{qa.question_text}</p>
+                              <p className="text-slate-900 leading-relaxed">{qa.question}</p>
                             </div>
                             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-200/50">
                               <Badge className="bg-[#6D28D9] text-white mb-2">AI Answer</Badge>
-                              <p className="text-slate-700 leading-relaxed">{qa.answer_text}</p>
+                              <p className="text-slate-700 leading-relaxed">{qa.answer}</p>
                             </div>
                           </div>
                         ))}
@@ -328,10 +330,10 @@ export default function ChannelChatPage() {
                                 </Badge>
                               </div>
                               <p className="font-semibold text-slate-900 leading-snug mb-2">
-                                {faq.question_text}
+                                {faq.question}
                               </p>
                               <p className="text-sm text-slate-600 leading-relaxed">
-                                {faq.answer_text}
+                                {faq.answer}
                               </p>
                             </div>
                             {index < faqs.length - 1 && <div className="h-5" />}
