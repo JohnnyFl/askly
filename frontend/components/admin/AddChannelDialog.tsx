@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,11 +13,40 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Loader2, Plus, Video } from 'lucide-react';
+import { Loader2, Plus, Video, ExternalLink, CheckCircle2 } from 'lucide-react';
 
 interface AddChannelDialogProps {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
+}
+
+// Helper function to extract channel ID from YouTube URL
+function extractChannelId(url: string): string | null {
+  if (!url) return null;
+
+  try {
+    const urlObj = new URL(url);
+
+    // Format: youtube.com/channel/CHANNEL_ID
+    if (urlObj.pathname.startsWith('/channel/')) {
+      return urlObj.pathname.split('/channel/')[1].split('/')[0];
+    }
+
+    // Format: youtube.com/@username - we'll need the actual channel ID
+    // In this case, we return null and ask user to provide it
+    if (urlObj.pathname.startsWith('/@')) {
+      return null;
+    }
+
+    // Format: youtube.com/c/username - also needs manual entry
+    if (urlObj.pathname.startsWith('/c/')) {
+      return null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function AddChannelDialog({ onSuccess, onError }: AddChannelDialogProps) {
@@ -28,6 +57,18 @@ export function AddChannelDialog({ onSuccess, onError }: AddChannelDialogProps) 
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubeChannelId, setYoutubeChannelId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoExtracted, setAutoExtracted] = useState(false);
+
+  // Auto-extract channel ID from YouTube URL
+  useEffect(() => {
+    const channelId = extractChannelId(youtubeUrl);
+    if (channelId) {
+      setYoutubeChannelId(channelId);
+      setAutoExtracted(true);
+    } else if (youtubeUrl && !youtubeChannelId) {
+      setAutoExtracted(false);
+    }
+  }, [youtubeUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +143,68 @@ export function AddChannelDialog({ onSuccess, onError }: AddChannelDialogProps) 
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+          {/* Instructions */}
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
+              <Video className="h-4 w-4 text-[#6D28D9]" />
+              How to find the Channel ID:
+            </h4>
+            <ol className="text-xs text-slate-600 space-y-1 ml-6 list-decimal">
+              <li>Go to the YouTube channel page</li>
+              <li>Look at the URL - if it contains <code className="bg-white px-1 rounded">/channel/</code>, copy the ID after it</li>
+              <li>Or right-click → View Page Source → search for <code className="bg-white px-1 rounded">channelId</code></li>
+              <li>Example: <code className="bg-white px-1 rounded">UCsBjURrPoezykLs9EqgamOA</code></li>
+            </ol>
+          </div>
+
+          {/* YouTube URL */}
+          <div className="space-y-2">
+            <Label htmlFor="youtube-url" className="text-sm font-semibold text-slate-900">
+              YouTube Channel URL
+            </Label>
+            <Input
+              id="youtube-url"
+              type="url"
+              placeholder="https://youtube.com/channel/UCsBjURrPoezykLs9EqgamOA"
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              className="h-12 rounded-xl border-2 border-purple-100 focus:border-[#6D28D9] text-base"
+            />
+            <p className="text-xs text-slate-500">
+              If URL contains <code className="bg-slate-100 px-1 rounded">/channel/</code>, the ID will be auto-extracted
+            </p>
+          </div>
+
+          {/* YouTube Channel ID */}
+          <div className="space-y-2">
+            <Label htmlFor="youtube-channel-id" className="text-sm font-semibold text-slate-900">
+              YouTube Channel ID <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="youtube-channel-id"
+                type="text"
+                placeholder="e.g., UCsBjURrPoezykLs9EqgamOA"
+                value={youtubeChannelId}
+                onChange={(e) => {
+                  setYoutubeChannelId(e.target.value);
+                  setAutoExtracted(false);
+                }}
+                required
+                className="h-12 rounded-xl border-2 border-purple-100 focus:border-[#6D28D9] text-base font-mono pr-10"
+              />
+              {autoExtracted && (
+                <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+              )}
+            </div>
+            {autoExtracted && (
+              <p className="text-xs text-green-600 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Auto-extracted from URL
+              </p>
+            )}
+          </div>
+
           {/* Channel Name */}
           <div className="space-y-2">
             <Label htmlFor="name" className="text-sm font-semibold text-slate-900">
@@ -130,40 +233,6 @@ export function AddChannelDialog({ onSuccess, onError }: AddChannelDialogProps) 
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               className="rounded-xl border-2 border-purple-100 focus:border-[#6D28D9] resize-none text-base"
-            />
-          </div>
-
-          {/* YouTube Channel ID */}
-          <div className="space-y-2">
-            <Label htmlFor="youtube-channel-id" className="text-sm font-semibold text-slate-900">
-              YouTube Channel ID <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="youtube-channel-id"
-              type="text"
-              placeholder="e.g., UCsBjURrPoezykLs9EqgamOA"
-              value={youtubeChannelId}
-              onChange={(e) => setYoutubeChannelId(e.target.value)}
-              required
-              className="h-12 rounded-xl border-2 border-purple-100 focus:border-[#6D28D9] text-base font-mono"
-            />
-            <p className="text-xs text-slate-500">
-              Find this in the channel URL after &quot;@username&quot; or in the channel page source
-            </p>
-          </div>
-
-          {/* YouTube URL */}
-          <div className="space-y-2">
-            <Label htmlFor="youtube-url" className="text-sm font-semibold text-slate-900">
-              YouTube Channel URL
-            </Label>
-            <Input
-              id="youtube-url"
-              type="url"
-              placeholder="https://youtube.com/@channelname"
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="h-12 rounded-xl border-2 border-purple-100 focus:border-[#6D28D9] text-base"
             />
           </div>
 
