@@ -117,8 +117,9 @@ func (r *DynamoDBRepository) QueryByGSI(ctx context.Context, tableName, indexNam
 		return fmt.Errorf("failed to query GSI: %w", err)
 	}
 
+	// Empty results are valid - return empty slice/array
 	if len(output.Items) == 0 {
-		return fmt.Errorf("no items found")
+		return nil
 	}
 
 	if err := attributevalue.UnmarshalListOfMaps(output.Items, results); err != nil {

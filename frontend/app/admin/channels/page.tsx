@@ -19,13 +19,16 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FadeInWhenVisible } from '@/components/animations/FadeInWhenVisible';
+import { AddChannelDialog } from '@/components/admin/AddChannelDialog';
+import { useToast } from '@/hooks/use-toast';
 
 type Channel = {
   id: string;
   name: string;
   description: string;
-  avatar_url: string;
+  thumbnail_url: string;
   youtube_url: string;
+  youtube_channel_id: string;
   created_at: string;
   transcription_count?: number;
   status?: 'active' | 'inactive';
@@ -33,6 +36,7 @@ type Channel = {
 
 export default function AdminChannelsPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,6 +70,22 @@ export default function AdminChannelsPage() {
     channel.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleAddSuccess = () => {
+    toast({
+      title: 'Success',
+      description: 'Channel created successfully',
+    });
+    fetchChannels();
+  };
+
+  const handleAddError = (error: Error) => {
+    toast({
+      title: 'Error',
+      description: error.message || 'Failed to create channel',
+      variant: 'destructive',
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -94,7 +114,7 @@ export default function AdminChannelsPage() {
         </Card>
       </FadeInWhenVisible>
 
-      {/* Search Bar */}
+      {/* Search Bar and Add Button */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
@@ -106,6 +126,7 @@ export default function AdminChannelsPage() {
             className="pl-12 h-14 rounded-2xl border-2 border-purple-100 focus:border-[#6D28D9] text-base bg-white/90 backdrop-blur-md shadow-lg"
           />
         </div>
+        <AddChannelDialog onSuccess={handleAddSuccess} onError={handleAddError} />
       </div>
 
       {/* Channels Grid */}
@@ -133,7 +154,7 @@ export default function AdminChannelsPage() {
                 <CardHeader className="p-6 relative z-10">
                   <div className="flex items-start gap-4 mb-4">
                     <Avatar className="h-16 w-16 ring-4 ring-purple-100 group-hover:ring-[#6D28D9]/30 group-hover:scale-110 transition-all duration-300">
-                      <AvatarImage src={channel.avatar_url} alt={channel.name} />
+                      <AvatarImage src={channel.thumbnail_url} alt={channel.name} />
                       <AvatarFallback className="bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] text-white text-xl font-bold">
                         {channel.name.substring(0, 2).toUpperCase()}
                       </AvatarFallback>

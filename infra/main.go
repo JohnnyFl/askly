@@ -99,6 +99,17 @@ func main() {
 					Name: pulumi.String("SK"),
 					Type: pulumi.String("S"),
 				},
+				&dynamodb.TableAttributeArgs{
+					Name: pulumi.String("youtube_channel_id"),
+					Type: pulumi.String("S"),
+				},
+			},
+			GlobalSecondaryIndexes: dynamodb.TableGlobalSecondaryIndexArray{
+				&dynamodb.TableGlobalSecondaryIndexArgs{
+					Name:           pulumi.String("youtube_channel_id-index"),
+					HashKey:        pulumi.String("youtube_channel_id"),
+					ProjectionType: pulumi.String("ALL"),
+				},
 			},
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String("askly-channels"),
@@ -708,6 +719,25 @@ func main() {
 			return err
 		}
 
+		// Lambda: create-channel
+		createChannelLambda, err := lambda.NewFunction(ctx, "create-channel", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-create-channel"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/create-channel"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-create-channel"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
 		// ===== API Gateway =====
 		// Create REST API
 		api, err := apigateway.NewRestApi(ctx, "askly-api", &apigateway.RestApiArgs{
@@ -1270,6 +1300,41 @@ func main() {
 			return err
 		}
 
+		// POST /admin/channels
+		_, err = apigateway.NewMethod(ctx, "admin-channels-create-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    adminChannelsResource.ID(),
+			HttpMethod:    pulumi.String("POST"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  adminAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		adminChannelsCreateIntegration, err := apigateway.NewIntegration(ctx, "admin-channels-create-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            adminChannelsResource.ID(),
+			HttpMethod:            pulumi.String("POST"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   createChannelLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+		allIntegrations = append(allIntegrations, adminChannelsCreateIntegration)
+
+		_, err = lambda.NewPermission(ctx, "admin-channels-create-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  createChannelLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
 		// Add OPTIONS to /admin/channels/{id}
 		err = addOptionsMethod(adminChannelIDResource.ID(), "admin-channel-get")
 		if err != nil {
@@ -1439,7 +1504,7 @@ func main() {
 			RestApi: api.ID(),
 			// Force new deployment on every update
 			Triggers: pulumi.StringMap{
-				"redeployment": pulumi.Sprintf("%v", "3"),
+				"redeployment": pulumi.Sprintf("%v", "5"),
 			},
 		}, pulumi.DependsOn(allIntegrations))
 		if err != nil {
