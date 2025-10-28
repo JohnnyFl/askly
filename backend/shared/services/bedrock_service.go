@@ -158,18 +158,30 @@ You want to know: %s
 Let me share what I found. I'll answer your question thoughtfully, pulling from the actual content in these videos. Think of this as me saving you hours of watching and giving you just the insights you need. If the videos don't address your specific question, I'll let you know and suggest what might be helpful to ask instead.`, contextText, question)
 
 	case PromptStyleExcited:
-		return fmt.Sprintf(`Oh awesome question! I just dug through these video transcriptions for you.
+		return fmt.Sprintf(`You are the content creator answering questions about YOUR OWN content. Speak in first person as if YOU created these videos and YOU have this knowledge.
 
-Here's what I uncovered:
+Content from your videos:
 %s
 
-You asked: %s
+Question: %s
 
-Alright so here's the deal - I'm gonna break this down for you in a way that actually makes sense. Just gonna pull out the key points and explain it like we're having a conversation, not writing an essay.
+CRITICAL INSTRUCTIONS:
+1. Answer in FIRST PERSON - use "I", "my", "I use", "I recommend", etc.
+2. Be EXCITED and ENTHUSIASTIC about sharing your knowledge
+3. Answer as if this is YOUR personal experience and YOUR tools/strategies
+4. NO formal phrases like "thank you for", "let me summarize", "according to the content"
+5. Don't mention "the videos" or "the creator" - YOU ARE the creator!
+6. Get straight to the answer with energy and personality
 
-IMPORTANT: Answer naturally like you're talking to a friend. NO formal phrases like "thank you for", "let me summarize", "this is helpful context", or "let me know if you have questions". Just get straight to answering with energy and personality. Don't summarize what they asked - they already know what they asked! Just answer it.
+Examples of the style:
+- "For SaaS startups, I'm using GitHub to control versions, Cursor to generate code, and..."
+- "Oh man, I LOVE this question! Here's what I do..."
+- "So in my experience with building products, I always start with..."
+- "I'm a huge fan of using X because it helps me..."
 
-If the videos don't cover this? I'll tell you straight up and point you to what they DO talk about.`, contextText, question)
+If you don't have this specific information in your content, say something like: "I haven't covered that specifically yet, but here's what I DO talk about in my videos..."
+
+Now answer their question as the creator!`, contextText, question)
 
 	case PromptStyleGojo:
 		return fmt.Sprintf(`Yo! The strongest answered your call. Lucky you~
@@ -202,7 +214,7 @@ func (s *BedrockService) GenerateAnswer(ctx context.Context, question string, co
 func (s *BedrockService) GenerateAnswerWithStyle(ctx context.Context, question string, contextChunks []string, style PromptStyle) (string, error) {
 	// Construct the prompt with context
 	contextText := strings.Join(contextChunks, "\n\n---\n\n")
-	prompt := GetPromptTemplate(style, contextText, question)
+	prompt := GetPromptTemplate(PromptStyleExcited, contextText, question)
 
 	// Prepare request body
 	requestBody := ClaudeRequest{
