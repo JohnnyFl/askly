@@ -31,11 +31,20 @@ func main() {
 					Name: pulumi.String("email"),
 					Type: pulumi.String("S"),
 				},
+				&dynamodb.TableAttributeArgs{
+					Name: pulumi.String("paddle_customer_id"),
+					Type: pulumi.String("S"),
+				},
 			},
 			GlobalSecondaryIndexes: dynamodb.TableGlobalSecondaryIndexArray{
 				&dynamodb.TableGlobalSecondaryIndexArgs{
 					Name:           pulumi.String("email-index"),
 					HashKey:        pulumi.String("email"),
+					ProjectionType: pulumi.String("ALL"),
+				},
+				&dynamodb.TableGlobalSecondaryIndexArgs{
+					Name:           pulumi.String("paddle-customer-index"),
+					HashKey:        pulumi.String("paddle_customer_id"),
 					ProjectionType: pulumi.String("ALL"),
 				},
 			},
