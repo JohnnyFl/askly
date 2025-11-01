@@ -116,6 +116,12 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 
 	// Initialize repositories
 	log.Debug().Msg("Initializing repositories")
+	userRepo, err := repository.NewUserRepository(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to initialize user repository")
+		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
+	}
+
 	channelRepo, err := repository.NewChannelRepository(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize channel repository")
@@ -126,6 +132,48 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize message repository")
 		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to initialize repository: %v", err))
+	}
+
+	// Get user to check subscription limits
+	var user models.User
+	if err := userRepo.GetUserByID(ctx, userID, &user); err != nil {
+		log.Error().Err(err).Msg("Failed to get user")
+		return response.Error(http.StatusNotFound, "User not found")
+	}
+
+	// Reset usage if billing period ended
+	if user.NeedsReset() {
+		log.Info().Msg("Billing period ended, resetting usage")
+		now := time.Now()
+		nextMonth := now.AddDate(0, 1, 0)
+		user.QuestionsUsedThisMonth = 0
+		user.CurrentPeriodStart = &now
+		user.CurrentPeriodEnd = &nextMonth
+		user.UpdatedAt = now
+
+		if err := userRepo.SaveUser(ctx, &user); err != nil {
+			log.Error().Err(err).Msg("Failed to reset billing period")
+			// Continue anyway
+		}
+	}
+
+	// Check if user has questions remaining
+	if !user.CanAskQuestion() {
+		log.Warn().
+			Int("used", user.QuestionsUsedThisMonth).
+			Int("limit", user.QuestionsLimit).
+			Msg("User exceeded question limit")
+		return response.Error(http.StatusTooManyRequests, fmt.Sprintf("You've used all %d questions this month. Upgrade to ask more!", user.QuestionsLimit))
+	}
+
+	// Check if user can access this channel
+	if !user.CanAccessChannel(channelID) {
+		log.Warn().
+			Str("user_tier", user.SubscriptionTier).
+			Str("selected_channel", user.SelectedChannelID).
+			Str("requested_channel", channelID).
+			Msg("User cannot access this channel")
+		return response.Error(http.StatusForbidden, "You don't have access to this channel. Free users can only access one selected channel. Upgrade to Pro for more!")
 	}
 
 	// Verify channel exists
@@ -280,6 +328,19 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	if err := messageRepo.CreateMessage(ctx, message); err != nil {
 		log.Error().Err(err).Msg("Failed to save message to DynamoDB")
 		return response.Error(http.StatusInternalServerError, fmt.Sprintf("Failed to save message: %v", err))
+	}
+
+	// Increment user's question count
+	user.QuestionsUsedThisMonth++
+	user.UpdatedAt = time.Now()
+	if err := userRepo.SaveUser(ctx, &user); err != nil {
+		log.Error().Err(err).Msg("Failed to update user question count")
+		// Continue anyway, message was already saved
+	} else {
+		log.Info().
+			Int("questions_used", user.QuestionsUsedThisMonth).
+			Int("questions_limit", user.QuestionsLimit).
+			Msg("Updated user question count")
 	}
 
 	duration := time.Since(start)

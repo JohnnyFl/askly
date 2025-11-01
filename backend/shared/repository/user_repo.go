@@ -71,6 +71,11 @@ func (r *UserRepository) UpdateUser(ctx context.Context, userID string, updates 
 	return r.db.UpdateItem(ctx, r.tableName, userID, "PROFILE", updates)
 }
 
+// SaveUser saves a complete user object (replaces all fields)
+func (r *UserRepository) SaveUser(ctx context.Context, user interface{}) error {
+	return r.db.PutItem(ctx, r.tableName, user)
+}
+
 // DeleteUser deletes a user
 func (r *UserRepository) DeleteUser(ctx context.Context, userID string) error {
 	return r.db.DeleteItem(ctx, r.tableName, userID, "PROFILE")

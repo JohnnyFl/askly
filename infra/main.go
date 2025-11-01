@@ -831,6 +831,44 @@ func main() {
 			return err
 		}
 
+		// Lambda: get-subscription (Get user subscription info)
+		getSubscriptionLambda, err := lambda.NewFunction(ctx, "get-subscription", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-get-subscription"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/get-subscription"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(256),
+			Timeout:     pulumi.Int(10),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-get-subscription"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: set-channel-selection (Set free user's channel selection)
+		setChannelSelectionLambda, err := lambda.NewFunction(ctx, "set-channel-selection", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-set-channel-selection"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/set-channel-selection"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(256),
+			Timeout:     pulumi.Int(10),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-set-channel-selection"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
 		// ===== API Gateway =====
 		// Create REST API
 		api, err := apigateway.NewRestApi(ctx, "askly-api", &apigateway.RestApiArgs{
@@ -1702,12 +1740,123 @@ func main() {
 			return err
 		}
 
+		// ===== User Subscription Routes =====
+		// Create /user resource
+		userResource, err := apigateway.NewResource(ctx, "user-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: rootResourceID,
+			PathPart: pulumi.String("user"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// GET /user/subscription - Get user subscription info (requires user auth)
+		userSubscriptionResource, err := apigateway.NewResource(ctx, "user-subscription-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: userResource.ID(),
+			PathPart: pulumi.String("subscription"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Add OPTIONS to /user/subscription
+		err = addOptionsMethod(userSubscriptionResource.ID(), "user-subscription")
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "user-subscription-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    userSubscriptionResource.ID(),
+			HttpMethod:    pulumi.String("GET"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		userSubscriptionIntegration, err := apigateway.NewIntegration(ctx, "user-subscription-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            userSubscriptionResource.ID(),
+			HttpMethod:            pulumi.String("GET"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   getSubscriptionLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+		allIntegrations = append(allIntegrations, userSubscriptionIntegration)
+
+		_, err = lambda.NewPermission(ctx, "user-subscription-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  getSubscriptionLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// POST /user/channel-selection - Set free user's channel selection (requires user auth)
+		userChannelSelectionResource, err := apigateway.NewResource(ctx, "user-channel-selection-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: userResource.ID(),
+			PathPart: pulumi.String("channel-selection"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Add OPTIONS to /user/channel-selection
+		err = addOptionsMethod(userChannelSelectionResource.ID(), "user-channel-selection")
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "user-channel-selection-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    userChannelSelectionResource.ID(),
+			HttpMethod:    pulumi.String("POST"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		userChannelSelectionIntegration, err := apigateway.NewIntegration(ctx, "user-channel-selection-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            userChannelSelectionResource.ID(),
+			HttpMethod:            pulumi.String("POST"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   setChannelSelectionLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+		allIntegrations = append(allIntegrations, userChannelSelectionIntegration)
+
+		_, err = lambda.NewPermission(ctx, "user-channel-selection-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  setChannelSelectionLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
 		// Deploy API Gateway
 		deployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
 			RestApi: api.ID(),
 			// Force new deployment on every update
 			Triggers: pulumi.StringMap{
-				"redeployment": pulumi.Sprintf("%v", "6"), // Incremented for Paddle routes
+				"redeployment": pulumi.Sprintf("%v", "7"), // Incremented for user subscription routes
 			},
 		}, pulumi.DependsOn(allIntegrations))
 		if err != nil {

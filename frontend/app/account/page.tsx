@@ -98,7 +98,7 @@ export default function AccountPage() {
   }
 
   const currentTier = SUBSCRIPTION_TIERS[subscription];
-  const usagePercentage = currentTier.questionsPerMonth === -1
+  const usagePercentage = usage.limit === 0
     ? 0
     : (usage.current / usage.limit) * 100;
 
