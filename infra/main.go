@@ -1,16 +1,48 @@
 package main
 
 import (
+	"os"
+
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/apigateway"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/cognito"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/dynamodb"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/iam"
 	"github.com/pulumi/pulumi-aws/sdk/v7/go/aws/lambda"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
+		// ===== Configuration =====
+		// Paddle configuration - reads from Pulumi config OR environment variables
+		cfg := config.New(ctx, "")
+
+		// Helper function to get config with env var fallback
+		getConfig := func(key, envVar, defaultValue string) string {
+			// Try Pulumi config first
+			if val := cfg.Get(key); val != "" {
+				return val
+			}
+			// Fall back to environment variable
+			if val := os.Getenv(envVar); val != "" {
+				return val
+			}
+			// Use default
+			return defaultValue
+		}
+
+		// Paddle API settings
+		paddleAPIKey := getConfig("paddle:apiKey", "PADDLE_API_KEY", "paddle_api_key_placeholder")
+		paddleWebhookSecret := getConfig("paddle:webhookSecret", "PADDLE_WEBHOOK_SECRET", "paddle_webhook_secret_placeholder")
+		paddleEnvironment := getConfig("paddle:environment", "PADDLE_ENVIRONMENT", "sandbox")
+
+		// Paddle Price IDs
+		paddleProMonthlyPriceID := getConfig("paddle:proMonthlyPriceId", "PADDLE_PRO_MONTHLY_PRICE_ID", "pri_placeholder_pro_monthly")
+		paddleProAnnualPriceID := getConfig("paddle:proAnnualPriceId", "PADDLE_PRO_ANNUAL_PRICE_ID", "pri_placeholder_pro_annual")
+		paddlePremiumMonthlyPriceID := getConfig("paddle:premiumMonthlyPriceId", "PADDLE_PREMIUM_MONTHLY_PRICE_ID", "pri_placeholder_premium_monthly")
+		paddlePremiumAnnualPriceID := getConfig("paddle:premiumAnnualPriceId", "PADDLE_PREMIUM_ANNUAL_PRICE_ID", "pri_placeholder_premium_annual")
+
 		// ===== DynamoDB Tables =====
 		// Create Users table
 		usersTable, err := dynamodb.NewTable(ctx, "askly-users", &dynamodb.TableArgs{
@@ -485,18 +517,32 @@ func main() {
 		// Lambda environment variables
 		lambdaEnv := &lambda.FunctionEnvironmentArgs{
 			Variables: pulumi.StringMap{
+				// DynamoDB Tables
 				"DYNAMODB_USERS_TABLE":          usersTable.Name,
 				"DYNAMODB_ADMINS_TABLE":         adminsTable.Name,
 				"DYNAMODB_CHANNELS_TABLE":       channelsTable.Name,
 				"DYNAMODB_TRANSCRIPTIONS_TABLE": transcriptionsTable.Name,
 				"DYNAMODB_CHUNKS_TABLE":         chunksTable.Name,
 				"DYNAMODB_MESSAGES_TABLE":       messagesTable.Name,
-				"BEDROCK_EMBEDDING_MODEL":       pulumi.String("amazon.titan-embed-text-v2:0"),
-				"BEDROCK_CHAT_MODEL":            pulumi.String("anthropic.claude-3-haiku-20240307-v1:0"),
-				"COGNITO_USER_POOL_ID":          userPool.ID(),
-				"COGNITO_CLIENT_ID":             userPoolClient.ID(),
-				"COGNITO_ADMIN_POOL_ID":         adminUserPool.ID(),
-				"COGNITO_ADMIN_CLIENT_ID":       adminPoolClient.ID(),
+
+				// AWS Bedrock
+				"BEDROCK_EMBEDDING_MODEL": pulumi.String("amazon.titan-embed-text-v2:0"),
+				"BEDROCK_CHAT_MODEL":      pulumi.String("anthropic.claude-3-haiku-20240307-v1:0"),
+
+				// Cognito
+				"COGNITO_USER_POOL_ID":    userPool.ID(),
+				"COGNITO_CLIENT_ID":       userPoolClient.ID(),
+				"COGNITO_ADMIN_POOL_ID":   adminUserPool.ID(),
+				"COGNITO_ADMIN_CLIENT_ID": adminPoolClient.ID(),
+
+				// Paddle Integration
+				"PADDLE_API_KEY":                  pulumi.String(paddleAPIKey),
+				"PADDLE_WEBHOOK_SECRET":           pulumi.String(paddleWebhookSecret),
+				"PADDLE_ENVIRONMENT":              pulumi.String(paddleEnvironment),
+				"PADDLE_PRO_MONTHLY_PRICE_ID":     pulumi.String(paddleProMonthlyPriceID),
+				"PADDLE_PRO_ANNUAL_PRICE_ID":      pulumi.String(paddleProAnnualPriceID),
+				"PADDLE_PREMIUM_MONTHLY_PRICE_ID": pulumi.String(paddlePremiumMonthlyPriceID),
+				"PADDLE_PREMIUM_ANNUAL_PRICE_ID":  pulumi.String(paddlePremiumAnnualPriceID),
 			},
 		}
 
@@ -740,6 +786,44 @@ func main() {
 			Timeout:     pulumi.Int(30),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String("askly-create-channel"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: create-checkout (Paddle integration)
+		createCheckoutLambda, err := lambda.NewFunction(ctx, "create-checkout", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-create-checkout"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/create-checkout"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-create-checkout"),
+				"Environment": pulumi.String("poc"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Lambda: paddle-webhook (Paddle webhook handler)
+		paddleWebhookLambda, err := lambda.NewFunction(ctx, "paddle-webhook", &lambda.FunctionArgs{
+			Name:        pulumi.String("askly-paddle-webhook"),
+			Runtime:     pulumi.String("provided.al2023"),
+			Handler:     pulumi.String("bootstrap"),
+			Role:        lambdaRole.Arn,
+			Code:        pulumi.NewFileArchive("../backend/lambdas/paddle-webhook"),
+			Environment: lambdaEnv,
+			MemorySize:  pulumi.Int(512),
+			Timeout:     pulumi.Int(30),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String("askly-paddle-webhook"),
 				"Environment": pulumi.String("poc"),
 			},
 		})
@@ -1508,12 +1592,122 @@ func main() {
 			return err
 		}
 
+		// ===== Paddle Integration Routes =====
+		// POST /checkout - Create Paddle checkout session (requires user auth)
+		checkoutResource, err := apigateway.NewResource(ctx, "checkout-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: rootResourceID,
+			PathPart: pulumi.String("checkout"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Add OPTIONS to /checkout
+		err = addOptionsMethod(checkoutResource.ID(), "checkout")
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "checkout-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    checkoutResource.ID(),
+			HttpMethod:    pulumi.String("POST"),
+			Authorization: pulumi.String("COGNITO_USER_POOLS"),
+			AuthorizerId:  userAuthorizer.ID(),
+		})
+		if err != nil {
+			return err
+		}
+
+		checkoutIntegration, err := apigateway.NewIntegration(ctx, "checkout-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            checkoutResource.ID(),
+			HttpMethod:            pulumi.String("POST"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   createCheckoutLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+		allIntegrations = append(allIntegrations, checkoutIntegration)
+
+		_, err = lambda.NewPermission(ctx, "checkout-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  createCheckoutLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create /webhook resource
+		webhookResource, err := apigateway.NewResource(ctx, "webhook-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: rootResourceID,
+			PathPart: pulumi.String("webhook"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// POST /webhook/paddle - Paddle webhook handler (NO AUTH - public endpoint)
+		paddleWebhookResource, err := apigateway.NewResource(ctx, "webhook-paddle-resource", &apigateway.ResourceArgs{
+			RestApi:  api.ID(),
+			ParentId: webhookResource.ID(),
+			PathPart: pulumi.String("paddle"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Add OPTIONS to /webhook/paddle
+		err = addOptionsMethod(paddleWebhookResource.ID(), "webhook-paddle")
+		if err != nil {
+			return err
+		}
+
+		_, err = apigateway.NewMethod(ctx, "webhook-paddle-method", &apigateway.MethodArgs{
+			RestApi:       api.ID(),
+			ResourceId:    paddleWebhookResource.ID(),
+			HttpMethod:    pulumi.String("POST"),
+			Authorization: pulumi.String("NONE"), // NO AUTH - Paddle will call this
+		})
+		if err != nil {
+			return err
+		}
+
+		webhookPaddleIntegration, err := apigateway.NewIntegration(ctx, "webhook-paddle-integration", &apigateway.IntegrationArgs{
+			RestApi:               api.ID(),
+			ResourceId:            paddleWebhookResource.ID(),
+			HttpMethod:            pulumi.String("POST"),
+			IntegrationHttpMethod: pulumi.String("POST"),
+			Type:                  pulumi.String("AWS_PROXY"),
+			Uri:                   paddleWebhookLambda.InvokeArn,
+		})
+		if err != nil {
+			return err
+		}
+		allIntegrations = append(allIntegrations, webhookPaddleIntegration)
+
+		_, err = lambda.NewPermission(ctx, "webhook-paddle-permission", &lambda.PermissionArgs{
+			Action:    pulumi.String("lambda:InvokeFunction"),
+			Function:  paddleWebhookLambda.Name,
+			Principal: pulumi.String("apigateway.amazonaws.com"),
+			SourceArn: pulumi.Sprintf("%s/*/*", api.ExecutionArn),
+		})
+		if err != nil {
+			return err
+		}
+
 		// Deploy API Gateway
 		deployment, err := apigateway.NewDeployment(ctx, "api-deployment", &apigateway.DeploymentArgs{
 			RestApi: api.ID(),
 			// Force new deployment on every update
 			Triggers: pulumi.StringMap{
-				"redeployment": pulumi.Sprintf("%v", "5"),
+				"redeployment": pulumi.Sprintf("%v", "6"), // Incremented for Paddle routes
 			},
 		}, pulumi.DependsOn(allIntegrations))
 		if err != nil {
