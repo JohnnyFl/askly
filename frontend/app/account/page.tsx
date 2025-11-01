@@ -7,7 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { MessageSquare, Settings, CreditCard, User, LogOut, Crown, Zap } from 'lucide-react';
 import Link from 'next/link';
-import { SUBSCRIPTION_TIERS, type SubscriptionTier } from '@/lib/polar';
+import {
+  SUBSCRIPTION_TIERS,
+  getPaddleBillingPortalUrl,
+  type SubscriptionTier
+} from '@/lib/paddle';
 
 export default function AccountPage() {
   const router = useRouter();
@@ -28,21 +32,38 @@ export default function AccountPage() {
 
   const fetchUserData = async (token: string) => {
     try {
-      setLoading(false);
-      const email = localStorage.getItem('user_email') || 'user@example.com';
-      const tier = (localStorage.getItem('subscription_tier') || 'FREE') as SubscriptionTier;
-
-      setUser({ email });
-      setSubscription(tier);
-
-      const tierData = SUBSCRIPTION_TIERS[tier];
-      const currentUsage = parseInt(localStorage.getItem('question_count') || '0');
-      setUsage({
-        current: currentUsage,
-        limit: tierData.questionsPerMonth,
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/subscription`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user data');
+      }
+
+      const data = await response.json();
+
+      setUser({ email: data.email });
+      setSubscription(data.subscription_tier as SubscriptionTier);
+      setUsage({
+        current: data.questions_used_this_month || 0,
+        limit: data.questions_limit || SUBSCRIPTION_TIERS[data.subscription_tier as SubscriptionTier].questionsPerMonth,
+      });
+
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching user data:', error);
+      // Fallback to localStorage for development/testing
+      const email = localStorage.getItem('user_email') || 'user@example.com';
+      const tier = (localStorage.getItem('subscription_tier') || 'FREE') as SubscriptionTier;
+      setUser({ email });
+      setSubscription(tier);
+      const tierData = SUBSCRIPTION_TIERS[tier];
+      setUsage({
+        current: parseInt(localStorage.getItem('question_count') || '0'),
+        limit: tierData.questionsPerMonth,
+      });
       setLoading(false);
     }
   };
@@ -59,7 +80,9 @@ export default function AccountPage() {
     if (subscription === 'FREE') {
       router.push('/pricing');
     } else {
-      window.open('https://polar.sh/purchases', '_blank');
+      // Open Paddle billing portal
+      const portalUrl = getPaddleBillingPortalUrl();
+      window.open(portalUrl, '_blank');
     }
   };
 

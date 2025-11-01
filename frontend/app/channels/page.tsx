@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import { FadeInWhenVisible } from '@/components/animations/FadeInWhenVisible';
 import { SkeletonCard } from '@/components/animations/SkeletonCard';
+import { ChannelSelectionModal } from '@/components/ChannelSelectionModal';
 
 type Channel = {
   id: string;
@@ -26,6 +27,9 @@ export default function ChannelsPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showChannelSelection, setShowChannelSelection] = useState(false);
+  const [userTier, setUserTier] = useState<string>('FREE');
+  const [hasSelectedChannel, setHasSelectedChannel] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -34,7 +38,32 @@ export default function ChannelsPage() {
       return;
     }
     fetchChannels();
+    fetchUserSubscription();
   }, [router]);
+
+  const fetchUserSubscription = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/subscription`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setUserTier(data.subscription_tier || 'FREE');
+      setHasSelectedChannel(!!data.selected_channel_id);
+
+      // Show channel selection modal for free users without a channel
+      if (data.subscription_tier?.toLowerCase() === 'free' && !data.selected_channel_id) {
+        setShowChannelSelection(true);
+      }
+    } catch (error) {
+      console.error('Error fetching user subscription:', error);
+    }
+  };
 
   const fetchChannels = async () => {
     try {
@@ -59,6 +88,33 @@ export default function ChannelsPage() {
   const handleSignOut = () => {
     localStorage.removeItem('auth_token');
     router.push('/login');
+  };
+
+  const handleChannelSelect = async (channelId: string) => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/channel-selection`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ channel_id: channelId }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save channel selection');
+      }
+
+      setHasSelectedChannel(true);
+      setShowChannelSelection(false);
+      router.push(`/channels/${channelId}`);
+    } catch (error) {
+      console.error('Error saving channel selection:', error);
+      // Fallback: just navigate to the channel
+      setShowChannelSelection(false);
+      router.push(`/channels/${channelId}`);
+    }
   };
 
   const filteredChannels = channels.filter(channel =>
@@ -240,6 +296,14 @@ export default function ChannelsPage() {
           </main>
         </div>
       </div>
+
+      {/* Channel Selection Modal for Free Users */}
+      <ChannelSelectionModal
+        open={showChannelSelection}
+        channels={channels}
+        onSelect={handleChannelSelect}
+        onClose={() => setShowChannelSelection(false)}
+      />
     </div>
   );
 }

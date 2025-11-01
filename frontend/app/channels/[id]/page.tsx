@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, Loader2, MessageSquare, HelpCircle, Clock, Sparkles, User } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, MessageSquare, HelpCircle, Clock, Sparkles, User, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import Link from 'next/link';
 
 type Channel = {
@@ -42,6 +43,9 @@ export default function ChannelChatPage() {
   const [question, setQuestion] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showChannelAccessModal, setShowChannelAccessModal] = useState(false);
+  const [usageData, setUsageData] = useState<{ current: number; limit: number; tier: string } | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -53,8 +57,31 @@ export default function ChannelChatPage() {
       fetchChannelData();
       fetchFAQs();
       fetchRecentQuestions();
+      fetchUsageData();
     }
   }, [channelId, router]);
+
+  const fetchUsageData = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/subscription`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setUsageData({
+        current: data.questions_used_this_month || 0,
+        limit: data.questions_limit || 5,
+        tier: data.subscription_tier || 'FREE',
+      });
+    } catch (error) {
+      console.error('Error fetching usage data:', error);
+    }
+  };
 
   const fetchChannelData = async () => {
     try {
@@ -123,6 +150,30 @@ export default function ChannelChatPage() {
     e.preventDefault();
     if (!question.trim()) return;
 
+    // Check usage limit before submitting
+    if (usageData && usageData.current >= usageData.limit) {
+      setShowUpgradeModal(true);
+      return;
+    }
+
+    // Check channel access for free users
+    if (usageData && usageData.tier.toLowerCase() === 'free') {
+      try {
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/user/subscription`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+
+        const userData = await response.json();
+        if (userData.selected_channel_id && userData.selected_channel_id !== channelId) {
+          setShowChannelAccessModal(true);
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking channel access:', error);
+      }
+    }
+
     setSubmitting(true);
 
     try {
@@ -136,10 +187,19 @@ export default function ChannelChatPage() {
         body: JSON.stringify({ question: question.trim() }),
       });
 
-      if (!response.ok) throw new Error('Failed to submit question');
+      if (!response.ok) {
+        const errorData = await response.json();
+        // Check if it's a usage limit error
+        if (response.status === 429 || errorData.error?.includes('limit')) {
+          setShowUpgradeModal(true);
+          return;
+        }
+        throw new Error('Failed to submit question');
+      }
 
       setQuestion('');
       fetchRecentQuestions();
+      fetchUsageData(); // Update usage count
     } catch (error) {
       console.error('Error submitting question:', error);
     } finally {
@@ -181,6 +241,22 @@ export default function ChannelChatPage() {
                 <h1 className="text-2xl font-bold text-slate-900 truncate">{channel.name}</h1>
                 <p className="text-sm text-slate-600 truncate">{channel.description}</p>
               </div>
+              {usageData && (
+                <div className="hidden sm:block">
+                  <Badge
+                    className={`px-3 py-1 ${
+                      usageData.current >= usageData.limit
+                        ? 'bg-red-100 text-red-700 border-red-200'
+                        : usageData.current / usageData.limit >= 0.8
+                        ? 'bg-orange-100 text-orange-700 border-orange-200'
+                        : 'bg-green-100 text-green-700 border-green-200'
+                    }`}
+                    variant="outline"
+                  >
+                    {usageData.current}/{usageData.limit === -1 ? '∞' : usageData.limit} questions
+                  </Badge>
+                </div>
+              )}
               <nav className="hidden md:flex gap-4">
                 <Link href="/pricing">
                   <Button variant="ghost" className="rounded-xl font-medium hover:bg-pink-50 hover:text-[#EF4444]">
@@ -348,6 +424,72 @@ export default function ChannelChatPage() {
           </main>
         </div>
       </div>
+
+      {/* Upgrade Modal */}
+      <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-12 w-12 bg-gradient-to-br from-[#FB7185] to-[#EF4444] rounded-2xl flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+              <DialogTitle className="text-2xl">Question Limit Reached</DialogTitle>
+            </div>
+            <DialogDescription className="text-base pt-2">
+              You've used {usageData?.current || 0} of {usageData?.limit || 5} questions this month.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-slate-700 mb-6">
+              Upgrade to <strong>Pro</strong> for 50 questions/month ($7/mo) or <strong>Premium</strong> for 200 questions/month ($15/mo) to continue exploring creator insights.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => router.push('/pricing')}
+                className="flex-1 bg-gradient-to-r from-[#FB7185] to-[#EF4444] hover:from-[#EF4444] hover:to-[#DC2626] shadow-lg rounded-xl"
+              >
+                View Plans
+              </Button>
+              <Button onClick={() => setShowUpgradeModal(false)} variant="outline" className="flex-1 rounded-xl">
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Channel Access Modal (Free Users) */}
+      <Dialog open={showChannelAccessModal} onOpenChange={setShowChannelAccessModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-12 w-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+              <DialogTitle className="text-2xl">Channel Access Limited</DialogTitle>
+            </div>
+            <DialogDescription className="text-base pt-2">
+              Free users can only access one channel at a time.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-slate-700 mb-6">
+              You've already selected a different channel. Upgrade to <strong>Pro</strong> to access 2 channels or <strong>Premium</strong> for unlimited channel access.
+            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => router.push('/pricing')}
+                className="flex-1 bg-gradient-to-r from-[#6D28D9] to-[#5B21B6] hover:from-[#5B21B6] hover:to-[#4C1D95] shadow-lg rounded-xl"
+              >
+                Upgrade Plan
+              </Button>
+              <Button onClick={() => setShowChannelAccessModal(false)} variant="outline" className="flex-1 rounded-xl">
+                Go Back
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

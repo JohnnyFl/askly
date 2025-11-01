@@ -5,9 +5,15 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Check, Zap, Crown } from 'lucide-react';
+import { MessageSquare, Check, Zap, Crown, Sparkles } from 'lucide-react';
 import Link from 'next/link';
-import { SUBSCRIPTION_TIERS } from '@/lib/polar';
+import {
+  SUBSCRIPTION_TIERS,
+  openPaddleCheckout,
+  getMonthlyPrice,
+  getAnnualSavings,
+  type SubscriptionTier
+} from '@/lib/paddle';
 
 const tiers = [
   {
@@ -42,8 +48,9 @@ const tiers = [
 export default function PricingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly');
 
-  const handleSubscribe = (tierId: string) => {
+  const handleSubscribe = async (tierId: string) => {
     if (tierId === 'FREE') {
       router.push('/signup');
       return;
@@ -51,17 +58,27 @@ export default function PricingPage() {
 
     setLoading(tierId);
 
-    const tier = SUBSCRIPTION_TIERS[tierId as keyof typeof SUBSCRIPTION_TIERS];
-    if (!tier.productId) {
-      console.error('Product ID not configured for tier:', tierId);
+    try {
+      const tier = SUBSCRIPTION_TIERS[tierId as SubscriptionTier];
+      const priceId = billingCycle === 'monthly' ? tier.priceIdMonthly : tier.priceIdAnnual;
+
+      if (!priceId) {
+        console.error('Price ID not configured for tier:', tierId, billingCycle);
+        alert('This plan is not yet configured. Please contact support.');
+        setLoading(null);
+        return;
+      }
+
+      const userEmail = localStorage.getItem('user_email');
+      const userId = localStorage.getItem('user_id');
+
+      await openPaddleCheckout(priceId, userEmail || undefined, userId || undefined);
+    } catch (error) {
+      console.error('Error opening checkout:', error);
+      alert('Failed to open checkout. Please try again.');
+    } finally {
       setLoading(null);
-      return;
     }
-
-    const userEmail = localStorage.getItem('user_email');
-    const checkoutUrl = `https://polar.sh/${process.env.NEXT_PUBLIC_POLAR_ORGANIZATION_ID}/products/${tier.productId}/checkout${userEmail ? `?customer_email=${encodeURIComponent(userEmail)}` : ''}`;
-
-    window.location.href = checkoutUrl;
   };
 
   return (
@@ -110,11 +127,43 @@ export default function PricingPage() {
               <p className="text-lg text-slate-600 max-w-2xl mx-auto">
                 Start free and upgrade as you grow. All plans include access to our AI-powered creator insights.
               </p>
+
+              {/* Billing cycle toggle */}
+              <div className="flex items-center justify-center gap-3 mt-8">
+                <span className={`text-sm font-medium ${billingCycle === 'monthly' ? 'text-slate-900' : 'text-slate-500'}`}>
+                  Monthly
+                </span>
+                <button
+                  onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'annual' : 'monthly')}
+                  className={`relative w-14 h-7 rounded-full transition-colors ${
+                    billingCycle === 'annual' ? 'bg-gradient-to-r from-[#FB7185] to-[#EF4444]' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform ${
+                      billingCycle === 'annual' ? 'translate-x-7' : ''
+                    }`}
+                  />
+                </button>
+                <span className={`text-sm font-medium ${billingCycle === 'annual' ? 'text-slate-900' : 'text-slate-500'}`}>
+                  Annual
+                </span>
+                {billingCycle === 'annual' && (
+                  <Badge className="bg-green-100 text-green-700 border-green-200">
+                    Save up to 20%
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-12">
               {tiers.map((tier) => {
                 const Icon = tier.icon;
+                const displayPrice = tier.id === 'FREE'
+                  ? 0
+                  : getMonthlyPrice(tier.id as SubscriptionTier, billingCycle);
+                const savings = tier.id !== 'FREE' ? getAnnualSavings(tier.id as SubscriptionTier) : 0;
+
                 return (
                   <Card
                     key={tier.id}
@@ -134,12 +183,22 @@ export default function PricingPage() {
                         <Icon className="h-8 w-8 text-white" />
                       </div>
                       <CardTitle className="text-3xl mb-2">{tier.name}</CardTitle>
-                      <div className="mb-4">
+                      <div className="mb-2">
                         <span className="text-5xl font-bold text-slate-900">
-                          ${tier.price}
+                          ${displayPrice.toFixed(displayPrice % 1 === 0 ? 0 : 2)}
                         </span>
                         <span className="text-slate-600 ml-2">/month</span>
                       </div>
+                      {billingCycle === 'annual' && tier.id !== 'FREE' && savings > 0 && (
+                        <Badge className="bg-green-100 text-green-700 border-green-200 mb-2 w-fit">
+                          Save ${savings}/year
+                        </Badge>
+                      )}
+                      {billingCycle === 'annual' && tier.id !== 'FREE' && (
+                        <p className="text-sm text-slate-500 mb-4">
+                          ${SUBSCRIPTION_TIERS[tier.id as SubscriptionTier].annualPrice} billed annually
+                        </p>
+                      )}
                       <CardDescription className="text-base">
                         {tier.id === 'FREE' && 'Perfect for trying out Askly'}
                         {tier.id === 'PRO' && 'For regular creator enthusiasts'}
