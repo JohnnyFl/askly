@@ -189,19 +189,15 @@ export default function AccountPage() {
                       <div className="flex justify-between mb-3">
                         <span className="text-sm font-medium text-slate-600">Monthly Questions</span>
                         <span className="text-sm font-semibold text-slate-900">
-                          {currentTier.questionsPerMonth === -1
-                            ? `${usage.current} / Unlimited`
-                            : `${usage.current} / ${usage.limit}`}
+                          {`${usage.current} / ${usage.limit}`}
                         </span>
                       </div>
-                      {currentTier.questionsPerMonth !== -1 && (
-                        <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-[#FB7185] to-[#EF4444] transition-all duration-300"
-                            style={{ width: `${usagePercentage}%` }}
-                          />
-                        </div>
-                      )}
+                      <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#FB7185] to-[#EF4444] transition-all duration-300"
+                          style={{ width: `${usagePercentage}%` }}
+                        />
+                      </div>
                     </div>
 
                     <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-6">
