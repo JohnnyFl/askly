@@ -3,15 +3,10 @@ package middleware
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"askly/backend/shared/models"
 	"askly/backend/shared/repository"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 // TierLimits defines the limits for each subscription tier
@@ -43,7 +38,6 @@ var SubscriptionTiers = map[string]TierLimits{
 // UsageLimiter handles subscription usage limits and enforcement
 type UsageLimiter struct {
 	userRepo *repository.UserRepository
-	db       *dynamodb.Client
 }
 
 // NewUsageLimiter creates a new UsageLimiter instance
@@ -53,14 +47,8 @@ func NewUsageLimiter(ctx context.Context) (*UsageLimiter, error) {
 		return nil, fmt.Errorf("failed to create user repository: %w", err)
 	}
 
-	dbRepo, err := repository.NewDynamoDBRepository(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create dynamodb repository: %w", err)
-	}
-
 	return &UsageLimiter{
 		userRepo: userRepo,
-		db:       dbRepo.Client,
 	}, nil
 }
 
@@ -99,32 +87,22 @@ func (ul *UsageLimiter) CheckQuestionLimit(ctx context.Context, userID string) (
 	return canAsk, remaining, nil
 }
 
-// IncrementQuestionCount atomically increments the question counter
+// IncrementQuestionCount increments the question counter for a user
+// Note: This method is not currently used. Usage tracking is handled directly in lambdas.
 func (ul *UsageLimiter) IncrementQuestionCount(ctx context.Context, userID string) error {
-	tableName := os.Getenv("DYNAMODB_USERS_TABLE")
-	if tableName == "" {
-		tableName = "askly-users"
+	// Get user
+	var user models.User
+	if err := ul.userRepo.GetUserByID(ctx, userID, &user); err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
 	}
 
-	// Use atomic increment with UpdateItem
-	_, err := ul.db.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName: aws.String(tableName),
-		Key: map[string]types.AttributeValue{
-			"PK": &types.AttributeValueMemberS{Value: userID},
-			"SK": &types.AttributeValueMemberS{Value: "PROFILE"},
-		},
-		UpdateExpression: aws.String("SET questions_used_this_month = questions_used_this_month + :inc, updated_at = :now"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":inc": &types.AttributeValueMemberN{Value: "1"},
-			":now": &types.AttributeValueMemberS{Value: time.Now().Format(time.RFC3339)},
-		},
-	})
+	// Increment count
+	user.QuestionsUsedThisMonth++
+	user.UpdatedAt = time.Now()
 
-	if err != nil {
-		return fmt.Errorf("failed to increment question count: %w", err)
-	}
-
-	return nil
+	// Update user - Note: This requires SaveUser method in repository
+	// For atomic updates, implement in the lambda directly
+	return fmt.Errorf("not implemented - use direct lambda implementation for atomic updates")
 }
 
 // ResetMonthlyUsage resets the monthly question counter and updates billing period

@@ -23,7 +23,7 @@ export const SUBSCRIPTION_TIERS = {
     questionsPerMonth: 50,
     channelsLimit: 2,
     features: [
-      "50 questions per month (~2/day)",
+      "50 questions per month",
       "Access to BOTH channels",
       "90-day conversation history",
       "Export conversations (markdown/PDF)",
@@ -39,10 +39,9 @@ export const SUBSCRIPTION_TIERS = {
     questionsPerMonth: 200,
     channelsLimit: -1, // Unlimited
     features: [
-      "200 questions per month (~7/day)",
+      "200 questions per month",
       "Access to all channels + early access",
       "Unlimited conversation history + search",
-      "Priority support (24h email response)",
       "Early access to new channels",
       "Advanced features when launched",
     ],

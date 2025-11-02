@@ -120,8 +120,8 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 		return response.Error(http.StatusInternalServerError, "Internal server error")
 	}
 
-	// Create user record in DynamoDB with Cognito user ID
-	user := models.NewUser(req.Email, cognitoUserID) // Store Cognito ID instead of password hash
+	// Create user record in DynamoDB with Cognito user ID as PK
+	user := models.NewUserWithCognitoID(cognitoUserID, req.Email)
 	if err := userRepo.CreateUser(ctx, user); err != nil {
 		log.Error().Err(err).Str("email", req.Email).Str("cognito_user_id", cognitoUserID).Msg("Failed to create user record in DynamoDB")
 		return response.Error(http.StatusInternalServerError, "Failed to create user record")

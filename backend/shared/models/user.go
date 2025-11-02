@@ -59,6 +59,27 @@ func NewUser(email, passwordHash string) *User {
 	}
 }
 
+// NewUserWithCognitoID creates a new User with Cognito sub as the ID
+func NewUserWithCognitoID(cognitoUserID, email string) *User {
+	now := time.Now()
+	nextMonth := now.AddDate(0, 1, 0)
+	return &User{
+		PK:                     cognitoUserID, // Use Cognito sub as PK
+		SK:                     "PROFILE",
+		Email:                  email,
+		PasswordHash:           "",     // No password hash needed for Cognito users
+		SubscriptionTier:       "free", // Default to free tier
+		SubscriptionStatus:     "active",
+		QuestionsUsedThisMonth: 0,
+		QuestionsLimit:         5, // Free tier: 5 questions/month
+		ChannelsLimit:          1, // Free tier: 1 channel only
+		CurrentPeriodStart:     &now,
+		CurrentPeriodEnd:       &nextMonth,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+}
+
 // NewAdmin creates a new Admin with generated ID
 func NewAdmin(email, passwordHash string) *Admin {
 	return &Admin{
