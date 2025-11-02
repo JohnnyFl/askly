@@ -53,11 +53,13 @@ export default function ChannelsPage() {
       if (!response.ok) return;
 
       const data = await response.json();
-      setUserTier(data.subscription_tier || 'FREE');
+      // Normalize tier to uppercase
+      const tier = (data.subscription_tier?.toUpperCase() || 'FREE');
+      setUserTier(tier);
       setHasSelectedChannel(!!data.selected_channel_id);
 
       // Show channel selection modal for free users without a channel
-      if (data.subscription_tier?.toLowerCase() === 'free' && !data.selected_channel_id) {
+      if (tier === 'FREE' && !data.selected_channel_id) {
         setShowChannelSelection(true);
       }
     } catch (error) {

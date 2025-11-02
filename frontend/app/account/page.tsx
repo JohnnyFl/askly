@@ -44,11 +44,14 @@ export default function AccountPage() {
 
       const data = await response.json();
 
+      // Normalize tier to uppercase (backend returns lowercase)
+      const tier = (data.subscription_tier?.toUpperCase() || 'FREE') as SubscriptionTier;
+
       setUser({ email: data.email });
-      setSubscription(data.subscription_tier as SubscriptionTier);
+      setSubscription(tier);
       setUsage({
         current: data.questions_used_this_month || 0,
-        limit: data.questions_limit || SUBSCRIPTION_TIERS[data.subscription_tier as SubscriptionTier].questionsPerMonth,
+        limit: data.questions_limit || SUBSCRIPTION_TIERS[tier].questionsPerMonth,
       });
 
       setLoading(false);

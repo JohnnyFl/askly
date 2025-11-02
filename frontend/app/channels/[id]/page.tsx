@@ -76,7 +76,7 @@ export default function ChannelChatPage() {
       setUsageData({
         current: data.questions_used_this_month || 0,
         limit: data.questions_limit || 5,
-        tier: data.subscription_tier || 'FREE',
+        tier: data.subscription_tier?.toUpperCase() || 'FREE',
       });
     } catch (error) {
       console.error('Error fetching usage data:', error);
@@ -436,7 +436,7 @@ export default function ChannelChatPage() {
               <DialogTitle className="text-2xl">Question Limit Reached</DialogTitle>
             </div>
             <DialogDescription className="text-base pt-2">
-              You've used {usageData?.current || 0} of {usageData?.limit || 5} questions this month.
+              You&#39;ve used {usageData?.current || 0} of {usageData?.limit || 5} questions this month.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -474,7 +474,7 @@ export default function ChannelChatPage() {
           </DialogHeader>
           <div className="py-4">
             <p className="text-slate-700 mb-6">
-              You've already selected a different channel. Upgrade to <strong>Pro</strong> to access 2 channels or <strong>Premium</strong> for unlimited channel access.
+              You&#39;ve already selected a different channel. Upgrade to <strong>Pro</strong> to access 2 channels or <strong>Premium</strong> for unlimited channel access.
             </p>
             <div className="flex gap-3">
               <Button
