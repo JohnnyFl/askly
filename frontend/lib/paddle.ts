@@ -175,7 +175,8 @@ export function getMonthlyPrice(tier: SubscriptionTier, billingCycle: 'monthly' 
   if (tier === 'FREE') return 0;
 
   if (billingCycle === 'annual') {
-    return tierData.annualPrice! / 12;
+    const annualPrice = tier === 'PRO' ? SUBSCRIPTION_TIERS.PRO.annualPrice : SUBSCRIPTION_TIERS.PREMIUM.annualPrice;
+    return annualPrice! / 12;
   }
 
   return tierData.price;
