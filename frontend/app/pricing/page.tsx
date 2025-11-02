@@ -17,27 +17,30 @@ import {
 
 const tiers = [
   {
-    id: 'FREE',
+    id: 'FREE' as const,
     name: SUBSCRIPTION_TIERS.FREE.name,
     price: SUBSCRIPTION_TIERS.FREE.price,
+    annualPrice: undefined,
     icon: MessageSquare,
     gradient: 'from-slate-400 to-slate-500',
     popular: false,
     features: SUBSCRIPTION_TIERS.FREE.features,
   },
   {
-    id: 'PRO',
+    id: 'PRO' as const,
     name: SUBSCRIPTION_TIERS.PRO.name,
     price: SUBSCRIPTION_TIERS.PRO.price,
+    annualPrice: SUBSCRIPTION_TIERS.PRO.annualPrice,
     icon: Zap,
     gradient: 'from-[#FB7185] to-[#EF4444]',
     popular: true,
     features: SUBSCRIPTION_TIERS.PRO.features,
   },
   {
-    id: 'PREMIUM',
+    id: 'PREMIUM' as const,
     name: SUBSCRIPTION_TIERS.PREMIUM.name,
     price: SUBSCRIPTION_TIERS.PREMIUM.price,
+    annualPrice: SUBSCRIPTION_TIERS.PREMIUM.annualPrice,
     icon: Crown,
     gradient: 'from-[#6D28D9] to-[#5B21B6]',
     popular: false,
@@ -194,9 +197,9 @@ export default function PricingPage() {
                           Save ${savings}/year
                         </Badge>
                       )}
-                      {billingCycle === 'annual' && tier.id !== 'FREE' && (
+                      {billingCycle === 'annual' && tier.annualPrice && (
                         <p className="text-sm text-slate-500 mb-4">
-                          ${SUBSCRIPTION_TIERS[tier.id as SubscriptionTier].annualPrice} billed annually
+                          ${tier.annualPrice} billed annually
                         </p>
                       )}
                       <CardDescription className="text-base">
@@ -253,7 +256,7 @@ export default function PricingPage() {
                         What happens when I reach my question limit?
                       </h3>
                       <p className="text-slate-600">
-                        You'll be prompted to upgrade to continue asking questions. Your usage resets at the start of each billing period.
+                        You&#39;ll be prompted to upgrade to continue asking questions. Your usage resets at the start of each billing period.
                       </p>
                     </div>
                     <div>
