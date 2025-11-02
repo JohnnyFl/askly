@@ -184,9 +184,13 @@ export function getMonthlyPrice(tier: SubscriptionTier, billingCycle: 'monthly' 
 
 // Helper: Get annual savings
 export function getAnnualSavings(tier: SubscriptionTier): number {
+  if (tier === 'FREE') return 0;
+
   const tierData = SUBSCRIPTION_TIERS[tier];
-  if (tier === 'FREE' || !tierData.annualPrice) return 0;
+  const annualPrice = tier === 'PRO' ? SUBSCRIPTION_TIERS.PRO.annualPrice : SUBSCRIPTION_TIERS.PREMIUM.annualPrice;
+
+  if (!annualPrice) return 0;
 
   const monthlyTotal = tierData.price * 12;
-  return monthlyTotal - tierData.annualPrice;
+  return monthlyTotal - annualPrice;
 }
