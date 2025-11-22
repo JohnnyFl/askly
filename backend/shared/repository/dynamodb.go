@@ -102,7 +102,12 @@ func (r *DynamoDBRepository) QueryByPK(ctx context.Context, tableName, pk string
 }
 
 // QueryByGSI queries items using a Global Secondary Index
-func (r *DynamoDBRepository) QueryByGSI(ctx context.Context, tableName, indexName, keyName, keyValue string, results interface{}) error {
+func (r *DynamoDBRepository) QueryByGSI(
+	ctx context.Context,
+	tableName, indexName, keyName, keyValue string,
+	results interface{},
+) error {
+
 	input := &dynamodb.QueryInput{
 		TableName:              aws.String(tableName),
 		IndexName:              aws.String(indexName),
@@ -112,17 +117,27 @@ func (r *DynamoDBRepository) QueryByGSI(ctx context.Context, tableName, indexNam
 		},
 	}
 
-	output, err := r.client.Query(ctx, input)
-	if err != nil {
-		return fmt.Errorf("failed to query GSI: %w", err)
+	var allItems []map[string]types.AttributeValue
+
+	for {
+		output, err := r.client.Query(ctx, input)
+		if err != nil {
+			return fmt.Errorf("failed to query GSI: %w", err)
+		}
+
+		allItems = append(allItems, output.Items...)
+
+		// Stop if no more pages
+		if output.LastEvaluatedKey == nil || len(output.LastEvaluatedKey) == 0 {
+			break
+		}
+
+		// Continue from the last evaluated key
+		input.ExclusiveStartKey = output.LastEvaluatedKey
 	}
 
-	// Empty results are valid - return empty slice/array
-	if len(output.Items) == 0 {
-		return nil
-	}
-
-	if err := attributevalue.UnmarshalListOfMaps(output.Items, results); err != nil {
+	// Unmarshal all collected items (empty list is valid)
+	if err := attributevalue.UnmarshalListOfMaps(allItems, results); err != nil {
 		return fmt.Errorf("failed to unmarshal results: %w", err)
 	}
 
