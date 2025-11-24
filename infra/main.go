@@ -527,7 +527,8 @@ func main() {
 
 				// AWS Bedrock
 				"BEDROCK_EMBEDDING_MODEL": pulumi.String("amazon.titan-embed-text-v2:0"),
-				"BEDROCK_CHAT_MODEL":      pulumi.String("anthropic.claude-3-haiku-20240307-v1:0"),
+				//"BEDROCK_CHAT_MODEL":      pulumi.String("anthropic.claude-3-haiku-20240307-v1:0"),
+				"BEDROCK_CHAT_MODEL": pulumi.String("anthropic.claude-sonnet-4-5-20250929-v1:0"),
 
 				// Cognito
 				"COGNITO_USER_POOL_ID":    userPool.ID(),
