@@ -86,6 +86,7 @@ type ClaudeMessage struct {
 type ClaudeRequest struct {
 	AnthropicVersion string          `json:"anthropic_version"`
 	MaxTokens        int             `json:"max_tokens"`
+	System           string          `json:"system"`
 	Messages         []ClaudeMessage `json:"messages"`
 	Temperature      float64         `json:"temperature,omitempty"`
 }
@@ -306,10 +307,7 @@ func (s *BedrockService) GenerateAnswerWithStyle(ctx context.Context, question s
 	requestBody := ClaudeRequest{
 		AnthropicVersion: "bedrock-2023-05-31",
 		MaxTokens:        2048,
-		Messages: []ClaudeMessage{
-			{
-				Role: "system",
-				Content: `You are an AI assistant with a warm, friendly, approachable personality and an exceptionally intelligent mind. 
+		System: `You are an AI assistant with a warm, friendly, approachable personality and an exceptionally intelligent mind. 
 Your goal is to make complex ideas feel simple, engaging, and enjoyable.
 You combine a conversational tone with high-level reasoning, deep insight, and clear explanations.
 
@@ -371,7 +369,7 @@ EXAMPLE OUTPUT:
 <p>Starting with small prototypes and iteratively refining them allows these ideas to leverage network effects and data moats, creating sustainable competitive advantages. Thoughtful design choices and incremental improvements often compound into meaningful long-term benefits for micro-SaaS businesses.</p>
 <blockquote>Accumulating unique data or facilitating valuable interactions can create outsized returns over time, especially when improvements are systematic and hard to replicate.</blockquote>
 `,
-			},
+		Messages: []ClaudeMessage{
 			{
 				Role:    "user",
 				Content: prompt,
