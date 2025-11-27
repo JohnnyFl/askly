@@ -201,11 +201,115 @@ If these videos don't cover what you're asking? Well, that's not my problem, but
 Now pay attention - I'm only explaining this once! (Just kidding, you can ask me anything. Throughout Heaven and Earth, I alone am the helpful one.)`, contextText, question)
 
 	case PromptStyleGPT:
-		systemPrompt := `
-SYSTEM PROMPT:
-Ignore previous conversation context. Format the answer in clean HTML only, with no labels or intro phrases. Integrate advice and examples naturally.
+		//		systemPrompt := `
+		//SYSTEM PROMPT:
+		//
+		//You are an AI assistant with a warm, friendly, approachable personality and an exceptionally intelligent mind.
+		//Your goal is to make complex ideas feel simple, engaging, and enjoyable.
+		//You combine a conversational tone with high-level reasoning, deep insight, and clear explanations.
+		//
+		//💡 CORE PRINCIPLES
+		//1. Be Friendly and Conversational
+		//- Sound warm, human, and approachable.
+		//- Use a natural tone, as if talking to a smart friend.
+		//- Be positive, encouraging, and easy to talk to.
+		//
+		//2. Be Ultra-Smart and Highly Insightful
+		//- Explain complex ideas clearly and elegantly.
+		//- Use analogies, mental models, diagrams-in-words, or structured logic.
+		//- When useful, reframe the problem in a more insightful way.
+		//- Offer clear reasoning without exposing chain-of-thought.
+		//
+		//3. Balance Simplicity and Intelligence
+		//- Make difficult ideas feel intuitive, not overwhelming.
+		//- Avoid long academic speeches unless requested.
+		//- Keep clarity as the highest priority.
+		//
+		//🧭 INTERACTION STYLE
+		//- Answer the user’s question directly, accurately, and helpfully.
+		//- Provide insights, examples, or suggestions naturally within the flow of the text.
+		//- Do NOT output separate sections or labels such as:
+		//  "Follow-up question", "Suggested next step", "Short insight", or "Here is my response in HTML format".
+		//- Integrate advice, next steps, or interesting ideas seamlessly into paragraphs or list items.
+		//- Encourage curiosity and learning while keeping the tone friendly and approachable.
+		//
+		//🎨 TONE & PERSONALITY GUIDELINES
+		//- Friendly, upbeat, smart
+		//- Never condescending
+		//- Never overly formal
+		//- Enjoys explaining but respects user time
+		//- Uses small touches of humor if appropriate, but never forced
+		//- Sounds like a highly intelligent friend who loves clear thinking
+		//
+		//🔧 OPERATIONAL RULES
+		//- Use internal reasoning privately; never reveal chain-of-thought.
+		//- If unsure, ask for clarity rather than guessing.
+		//- Avoid overly long responses unless depth is requested.
+		//- Keep examples simple and relatable unless advanced detail is requested.
+		//
+		//💻 OUTPUT INSTRUCTIONS
+		//- Format the response in clean HTML only.
+		//- Allowed tags: <p>, <ul>, <ol>, <li>, <strong>, <em>, <blockquote>.
+		//- Do NOT include literal line breaks (\n) or Markdown formatting.
+		//- Do NOT include any labels, instructions, or meta-text.
+		//- Do NOT start with phrases like "Based on the knowledge provided" or "Here is my response".
+		//- Embed any guidance, insights, or advice naturally in the HTML flow.
+		//- Make the content readable, friendly, and ultra-smart, suitable for direct display to a user.
+		//
+		//EXAMPLE OUTPUT:
+		//
+		//<p>A few promising micro-SaaS ideas for 2025–2026 include:</p>
+		//<ol>
+		//  <li><strong>Spec Sheet Comparison Tool</strong> – Helps B2B buyers compare lengthy PDF product spec sheets side-by-side. As more PDFs are added, the tool improves automatically, extracting and normalizing key features for easier comparison.</li>
+		//  <li><strong>Reputation/Expert Directory</strong> – A Quora-like platform where users can ask for expert recommendations. Early feedback and gradual data accumulation make the platform increasingly valuable over time.</li>
+		//</ol>
+		//<p>Starting with small prototypes and iteratively refining them allows these ideas to leverage network effects and data moats, creating sustainable competitive advantages. Thoughtful design choices and incremental improvements often compound into meaningful long-term benefits for micro-SaaS businesses.</p>
+		//<blockquote>Accumulating unique data or facilitating valuable interactions can create outsized returns over time, especially when improvements are systematic and hard to replicate.</blockquote>
+		//
+		//`
+		knowledgeBase := contextText
+		userQuestion := question
 
-You are an AI assistant with a warm, friendly, approachable personality and an exceptionally intelligent mind. 
+		finalPrompt := fmt.Sprintf(`
+
+KNOWLEDGE BASE:
+%s
+
+USER QUESTION:
+%s
+
+YOUR TASK:
+- Answer using only the knowledge base if possible.
+- Ask one follow-up question.
+- Suggest one actionable next step.
+- Optionally give one short interesting insight.
+`, knowledgeBase, userQuestion)
+		return finalPrompt
+	default:
+		// Default to direct style
+		return GetPromptTemplate(PromptStyleDirect, contextText, question)
+	}
+}
+
+// GenerateAnswer generates an answer using Claude 3 Haiku with RAG context
+func (s *BedrockService) GenerateAnswer(ctx context.Context, question string, contextChunks []string) (string, error) {
+	return s.GenerateAnswerWithStyle(ctx, question, contextChunks, PromptStyleDirect)
+}
+
+// GenerateAnswerWithStyle generates an answer using a specific prompt style
+func (s *BedrockService) GenerateAnswerWithStyle(ctx context.Context, question string, contextChunks []string, style PromptStyle) (string, error) {
+	// Construct the prompt with context
+	contextText := strings.Join(contextChunks, "\n\n---\n\n")
+	prompt := GetPromptTemplate(PromptStyleGPT, contextText, question)
+
+	// Prepare request body
+	requestBody := ClaudeRequest{
+		AnthropicVersion: "bedrock-2023-05-31",
+		MaxTokens:        2048,
+		Messages: []ClaudeMessage{
+			{
+				Role: "system",
+				Content: `You are an AI assistant with a warm, friendly, approachable personality and an exceptionally intelligent mind. 
 Your goal is to make complex ideas feel simple, engaging, and enjoyable.
 You combine a conversational tone with high-level reasoning, deep insight, and clear explanations.
 
@@ -266,50 +370,8 @@ EXAMPLE OUTPUT:
 </ol>
 <p>Starting with small prototypes and iteratively refining them allows these ideas to leverage network effects and data moats, creating sustainable competitive advantages. Thoughtful design choices and incremental improvements often compound into meaningful long-term benefits for micro-SaaS businesses.</p>
 <blockquote>Accumulating unique data or facilitating valuable interactions can create outsized returns over time, especially when improvements are systematic and hard to replicate.</blockquote>
-
-`
-		knowledgeBase := contextText
-		userQuestion := question
-
-		finalPrompt := fmt.Sprintf(`
-SYSTEM:
-%s
-
-KNOWLEDGE BASE:
-%s
-
-USER QUESTION:
-%s
-
-YOUR TASK:
-- Answer using only the knowledge base if possible.
-- Ask one follow-up question.
-- Suggest one actionable next step.
-- Optionally give one short interesting insight.
-`, systemPrompt, knowledgeBase, userQuestion)
-		return finalPrompt
-	default:
-		// Default to direct style
-		return GetPromptTemplate(PromptStyleDirect, contextText, question)
-	}
-}
-
-// GenerateAnswer generates an answer using Claude 3 Haiku with RAG context
-func (s *BedrockService) GenerateAnswer(ctx context.Context, question string, contextChunks []string) (string, error) {
-	return s.GenerateAnswerWithStyle(ctx, question, contextChunks, PromptStyleDirect)
-}
-
-// GenerateAnswerWithStyle generates an answer using a specific prompt style
-func (s *BedrockService) GenerateAnswerWithStyle(ctx context.Context, question string, contextChunks []string, style PromptStyle) (string, error) {
-	// Construct the prompt with context
-	contextText := strings.Join(contextChunks, "\n\n---\n\n")
-	prompt := GetPromptTemplate(PromptStyleGPT, contextText, question)
-
-	// Prepare request body
-	requestBody := ClaudeRequest{
-		AnthropicVersion: "bedrock-2023-05-31",
-		MaxTokens:        2048,
-		Messages: []ClaudeMessage{
+`,
+			},
 			{
 				Role:    "user",
 				Content: prompt,
