@@ -267,6 +267,28 @@ Examples:
 - Avoid overly long responses unless asked for more depth.
 - Keep examples simple and relatable unless advanced detail is requested.
 - Encourage curiosity and learning
+
+Please generate the response in HTML format with the following structure:
+- Each main idea as a <p> or <li>
+- Follow-up question in <strong> or <h3>
+- Suggested next step in <strong> or <h3>
+- Short insight in <em> or <blockquote>
+- Keep it friendly and readable
+Do not include any "\n" characters; use proper HTML tags.
+
+EXAMPLE:
+<p>Based on the knowledge provided, a few ideas stand out:</p>
+<ol>
+  <li>Spec Sheet Comparison Tool: ...</li>
+  <li>Reputation/Expert Directory: ...</li>
+</ol>
+<h3>Follow-up question:</h3>
+<p>What specific features or functionality would you envision for a reputation/expert directory platform?</p>
+<h3>Suggested next step:</h3>
+<p>I would recommend doing some initial market research...</p>
+<h3>Short insight:</h3>
+<blockquote>Building data moats through compounding datasets can be a powerful strategy...</blockquote>
+
 `
 		knowledgeBase := contextText
 		userQuestion := question
