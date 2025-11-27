@@ -203,6 +203,7 @@ Now pay attention - I'm only explaining this once! (Just kidding, you can ask me
 	case PromptStyleGPT:
 		systemPrompt := `
 SYSTEM PROMPT:
+Ignore previous conversation context. Format the answer in clean HTML only, with no labels or intro phrases. Integrate advice and examples naturally.
 
 You are an AI assistant with a warm, friendly, approachable personality and an exceptionally intelligent mind. 
 Your goal is to make complex ideas feel simple, engaging, and enjoyable.
