@@ -269,22 +269,21 @@ Examples:
 - Encourage curiosity and learning
 
 Please answer the user’s question using the knowledge base.
+
+Instructions:
 - Format the response in clean HTML only (<p>, <ul>/<ol>, <li>, <strong>, <em>, <blockquote>, etc.).
-- Do NOT include any text like "Follow-up question", "Suggested next step", "Short insight", or "Here is my response in HTML format".
-- The HTML should read naturally as a friendly, ultra-smart explanation.
-- Include examples, insights, or explanations directly in the flow, without special labels.
+- Do NOT include labels like "Follow-up question", "Suggested next step", "Short insight", or "Here is my response in HTML format".
+- Do NOT create separate sections for follow-ups, next steps, or insights. Instead, **integrate any suggestions, insights, or advice naturally within the flow of the text**.
+- The HTML should read as a friendly, ultra-smart explanation, easy to read and engaging.
+- Include examples, insights, or suggestions directly in the paragraphs or list items.
 
-
-
-EXAMPLE:
+Example:
 <p>Based on the knowledge provided, a few interesting micro-SaaS ideas stand out for the end of 2025:</p>
 <ol>
   <li><strong>Spec Sheet Comparison Tool</strong> – This helps B2B buyers easily compare lengthy PDF spec sheets. Over time, the system improves as more PDFs are added.</li>
   <li><strong>Reputation/Expert Directory</strong> – A Quora-like platform for asking expert recommendations, searchable and intuitive.</li>
 </ol>
-<p>One way to explore these ideas is to start with small-scale user testing and prototype development. You might also consider how data accumulation could give your platform a long-term advantage.</p>
-<p>Curious insight: small improvements in workflow automation or searchable expert networks can compound into significant competitive advantage over time.</p>
-
+<p>One way to explore these ideas is to start with small-scale user testing and prototype development. You might also consider how data accumulation could give your platform a long-term advantage. Small improvements in workflow automation or searchable expert networks can compound into significant competitive advantage over time.</p>
 
 `
 		knowledgeBase := contextText
