@@ -364,7 +364,7 @@ export default function ChannelChatPage() {
                               <Badge className="bg-[#6D28D9] text-white mb-2">AI Answer</Badge>
                               {/*<div className="text-slate-700 leading-relaxed">{qa.answer}</div>*/}
                               {/* @ts-ignore */}
-                              <div className="text-slate-700 leading-relaxed" dangerouslySetInnerHTML={qa.answer}></div>
+                              <div className="text-slate-700 leading-relaxed" dangerouslySetInnerHTML={{__html: qa.answer}}></div>
                             </div>
                           </div>
                         ))}

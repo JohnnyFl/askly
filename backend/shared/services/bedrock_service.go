@@ -268,26 +268,23 @@ Examples:
 - Keep examples simple and relatable unless advanced detail is requested.
 - Encourage curiosity and learning
 
-Please generate the response in HTML format with the following structure:
-- Each main idea as a <p> or <li>
-- Follow-up question in <strong> or <h3>
-- Suggested next step in <strong> or <h3>
-- Short insight in <em> or <blockquote>
-- Keep it friendly and readable
-Do not include any "\n" characters; use proper HTML tags.
+Please answer the user’s question using the knowledge base.
+- Format the response in clean HTML only (<p>, <ul>/<ol>, <li>, <strong>, <em>, <blockquote>, etc.).
+- Do NOT include any text like "Follow-up question", "Suggested next step", "Short insight", or "Here is my response in HTML format".
+- The HTML should read naturally as a friendly, ultra-smart explanation.
+- Include examples, insights, or explanations directly in the flow, without special labels.
+
+
 
 EXAMPLE:
-<p>Based on the knowledge provided, a few ideas stand out:</p>
+<p>Based on the knowledge provided, a few interesting micro-SaaS ideas stand out for the end of 2025:</p>
 <ol>
-  <li>Spec Sheet Comparison Tool: ...</li>
-  <li>Reputation/Expert Directory: ...</li>
+  <li><strong>Spec Sheet Comparison Tool</strong> – This helps B2B buyers easily compare lengthy PDF spec sheets. Over time, the system improves as more PDFs are added.</li>
+  <li><strong>Reputation/Expert Directory</strong> – A Quora-like platform for asking expert recommendations, searchable and intuitive.</li>
 </ol>
-<h3>Follow-up question:</h3>
-<p>What specific features or functionality would you envision for a reputation/expert directory platform?</p>
-<h3>Suggested next step:</h3>
-<p>I would recommend doing some initial market research...</p>
-<h3>Short insight:</h3>
-<blockquote>Building data moats through compounding datasets can be a powerful strategy...</blockquote>
+<p>One way to explore these ideas is to start with small-scale user testing and prototype development. You might also consider how data accumulation could give your platform a long-term advantage.</p>
+<p>Curious insight: small improvements in workflow automation or searchable expert networks can compound into significant competitive advantage over time.</p>
+
 
 `
 		knowledgeBase := contextText
