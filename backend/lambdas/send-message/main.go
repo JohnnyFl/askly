@@ -303,6 +303,7 @@ func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events
 	log.Info().
 		Int("context_chunk_count", len(contextChunks)).
 		Str("prompt_style", string(promptStyle)).
+		Any("chunks", contextChunks).
 		Msg("Calling Bedrock to generate answer")
 	answer, err := bedrockService.GenerateAnswerWithStyle(ctx, req.Question, contextChunks, promptStyle)
 	if err != nil {
