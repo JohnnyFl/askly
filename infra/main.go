@@ -1857,7 +1857,7 @@ func main() {
 			RestApi: api.ID(),
 			// Force new deployment on every update
 			Triggers: pulumi.StringMap{
-				"redeployment": pulumi.Sprintf("%v", "8"), // Incremented for CORS fix
+				"redeployment": pulumi.Sprintf("%v", "9"), // Incremented for CORS fix
 			},
 		}, pulumi.DependsOn(allIntegrations))
 		if err != nil {
