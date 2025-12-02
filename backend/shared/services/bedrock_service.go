@@ -385,7 +385,7 @@ EXAMPLE OUTPUT:
 
 	// Call Bedrock API for Claude 3 Haiku
 	response, err := s.client.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
-		ModelId:     aws.String("anthropic.claude-sonnet-4-5-20250929-v1:0"),
+		ModelId:     aws.String("global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
 		ContentType: aws.String("application/json"),
 		Accept:      aws.String("application/json"),
 		Body:        requestJSON,
