@@ -375,55 +375,55 @@ export default function ChannelChatPage() {
               </Card>
             </div>
 
-            <div className="lg:col-span-1">
-              <Card className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-purple-100/50 sticky top-8">
-                <CardHeader className="p-8 pb-6">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="h-12 w-12 bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] rounded-2xl flex items-center justify-center shadow-lg">
-                      <HelpCircle className="h-6 w-6 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl">Community FAQs</CardTitle>
-                      <CardDescription className="text-sm mt-1">
-                        Popular questions from fans
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-8 pb-8">
-                  <ScrollArea className="h-[600px] pr-4">
-                    {faqs.length === 0 ? (
-                      <div className="text-center py-12 text-slate-500">
-                        <HelpCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-[#6D28D9]" />
-                        <p className="text-base font-medium">No FAQs Yet</p>
-                        <p className="text-sm mt-1">Be the first to ask!</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-5">
-                        {faqs.map((faq, index) => (
-                          <div key={faq.id}>
-                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-200/50 hover:border-[#6D28D9]/50 transition-colors">
-                              <div className="flex items-start gap-3 mb-3">
-                                <Badge className="bg-[#6D28D9] text-white shrink-0">
-                                  #{index + 1}
-                                </Badge>
-                              </div>
-                              <p className="font-semibold text-slate-900 leading-snug mb-2">
-                                {faq.question}
-                              </p>
-                              <p className="text-sm text-slate-600 leading-relaxed">
-                                {faq.answer}
-                              </p>
-                            </div>
-                            {index < faqs.length - 1 && <div className="h-5" />}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
+            {/*<div className="lg:col-span-1">*/}
+            {/*  <Card className="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-purple-100/50 sticky top-8">*/}
+            {/*    <CardHeader className="p-8 pb-6">*/}
+            {/*      <div className="flex items-center gap-3 mb-2">*/}
+            {/*        <div className="h-12 w-12 bg-gradient-to-br from-[#6D28D9] to-[#5B21B6] rounded-2xl flex items-center justify-center shadow-lg">*/}
+            {/*          <HelpCircle className="h-6 w-6 text-white" />*/}
+            {/*        </div>*/}
+            {/*        <div>*/}
+            {/*          <CardTitle className="text-xl">Community FAQs</CardTitle>*/}
+            {/*          <CardDescription className="text-sm mt-1">*/}
+            {/*            Popular questions from fans*/}
+            {/*          </CardDescription>*/}
+            {/*        </div>*/}
+            {/*      </div>*/}
+            {/*    </CardHeader>*/}
+            {/*    <CardContent className="px-8 pb-8">*/}
+            {/*      <ScrollArea className="h-[600px] pr-4">*/}
+            {/*        {faqs.length === 0 ? (*/}
+            {/*          <div className="text-center py-12 text-slate-500">*/}
+            {/*            <HelpCircle className="h-16 w-16 mx-auto mb-4 opacity-30 text-[#6D28D9]" />*/}
+            {/*            <p className="text-base font-medium">No FAQs Yet</p>*/}
+            {/*            <p className="text-sm mt-1">Be the first to ask!</p>*/}
+            {/*          </div>*/}
+            {/*        ) : (*/}
+            {/*          <div className="space-y-5">*/}
+            {/*            {faqs.map((faq, index) => (*/}
+            {/*              <div key={faq.id}>*/}
+            {/*                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-5 border-2 border-purple-200/50 hover:border-[#6D28D9]/50 transition-colors">*/}
+            {/*                  <div className="flex items-start gap-3 mb-3">*/}
+            {/*                    <Badge className="bg-[#6D28D9] text-white shrink-0">*/}
+            {/*                      #{index + 1}*/}
+            {/*                    </Badge>*/}
+            {/*                  </div>*/}
+            {/*                  <p className="font-semibold text-slate-900 leading-snug mb-2">*/}
+            {/*                    {faq.question}*/}
+            {/*                  </p>*/}
+            {/*                  <p className="text-sm text-slate-600 leading-relaxed">*/}
+            {/*                    {faq.answer}*/}
+            {/*                  </p>*/}
+            {/*                </div>*/}
+            {/*                {index < faqs.length - 1 && <div className="h-5" />}*/}
+            {/*              </div>*/}
+            {/*            ))}*/}
+            {/*          </div>*/}
+            {/*        )}*/}
+            {/*      </ScrollArea>*/}
+            {/*    </CardContent>*/}
+            {/*  </Card>*/}
+            {/*</div>*/}
           </main>
         </div>
       </div>
